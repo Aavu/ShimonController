@@ -249,7 +249,7 @@ char serialib::writeChar(const char Byte)
 char serialib::writeString(const char *receivedString)
 {
     // Length of the string
-    int Length=strlen(receivedString);
+    size_t Length=strlen(receivedString);
     // Write the string
     if (write(m_fd, receivedString, Length) != Length) return -1;
     // Write operation successful
@@ -276,6 +276,17 @@ char serialib::writeBytes(const void *Buffer, const unsigned int NbBytes)
     return 1;
 }
 
+/*!
+     \brief Write an array of data on the current serial port
+     \param Buffer : array of bytes to send on the port
+     \param NbBytes : number of byte to send
+     \return 1 success
+     \return -1 error while writing data
+  */
+char serialib::writeBytes(const uint8_t *Buffer, const unsigned int NbBytes)
+{
+    return writeBytes((const void *)Buffer, NbBytes);
+}
 
 
 /*!
@@ -474,7 +485,9 @@ int serialib::readBytes (void *buffer,unsigned int maxNbBytes,unsigned int timeO
     return (int)NbByteRead;
 }
 
-
+int serialib::readBytes (uint8_t *buffer,unsigned int maxNbBytes,unsigned int timeOut_ms, unsigned int sleepDuration_us) const {
+    return readBytes((void*)buffer, maxNbBytes, timeOut_ms, sleepDuration_us);
+}
 
 
 // _________________________
@@ -571,7 +584,7 @@ bool serialib::clearDTR()
 
 /*!
     \brief      Set or unset the bit RTS (pin 7)
-                RTS stands for Data Termina Ready
+                RTS stands for Request to Send
                 Convenience method :This method calls setDTR and clearDTR
     \param      status = true set DTR
                 status = false unset DTR
@@ -591,7 +604,7 @@ bool serialib::RTS(bool status)
 
 /*!
     \brief      Set the bit RTS (pin 7)
-                RTS stands for Data Terminal Ready
+                RTS stands for Request to Send
     \return     If the function fails, the return value is false
                 If the function succeeds, the return value is true.
 */
@@ -609,7 +622,7 @@ bool serialib::setRTS() const
 
 /*!
     \brief      Clear the bit RTS (pin 7)
-                RTS stands for Data Terminal Ready
+                RTS stands for Request to Send
     \return     If the function fails, the return value is false
                 If the function succeeds, the return value is true.
 */

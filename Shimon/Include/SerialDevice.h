@@ -76,6 +76,15 @@ public:
         return kNoError;
     }
 
+    Error_t write(uint8_t* buf, size_t len) {
+        if (!m_bInitialized) return kNotInitializedError;
+        std::lock_guard<std::mutex> lk(m_mtx);
+#ifndef SIMULATE
+        if (m_serial.writeBytes(buf, len) != 1) return kWriteError;
+#endif
+        return kNoError;
+    }
+
     Error_t readline(char* line, char finalChar='\n', int maxNbBytes=64, unsigned int timeout_ms=0) {
         if (!m_bInitialized) return kNotInitializedError;
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -84,7 +93,16 @@ public:
         if (_n != maxNbBytes) return kReadError;
 #endif
         return kNoError;
+    }
 
+    Error_t readBytes(uint8_t* buf, size_t length=64, unsigned int timeout_ms=0) {
+        if (!m_bInitialized) return kNotInitializedError;
+        std::lock_guard<std::mutex> lk(m_mtx);
+#ifndef SIMULATE
+        int _n = m_serial.readBytes(buf, length, timeout_ms);
+        if (_n != length) return kReadError;
+#endif
+        return kNoError;
     }
 
     [[nodiscard]] Error_t sendBreak(int time=0) {

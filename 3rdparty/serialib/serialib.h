@@ -26,11 +26,11 @@ This is a licence-free software, it can be used by anyone who try to build a bet
 
 // Include for Linux
 #if defined (__linux__) || defined(__APPLE__)
-    #include <stdlib.h>
+    #include <cstdlib>
     #include <sys/types.h>
     #include <sys/shm.h>
     #include <termios.h>
-    #include <string.h>
+    #include <cstring>
     #include <iostream>
     #include <sys/time.h>
     // File control definitions
@@ -149,10 +149,10 @@ public:
 
     // Write an array of bytes
     char    writeBytes  (const void *Buffer, unsigned int NbBytes);
-
+    char    writeBytes  (const uint8_t *Buffer, unsigned int NbBytes);
     // Read an array of byte (with timeout)
     int     readBytes   (void *buffer,unsigned int maxNbBytes, unsigned int timeOut_ms=0, unsigned int sleepDuration_us=100) const;
-
+    int     readBytes   (uint8_t *buffer, unsigned int maxNbBytes, unsigned int timeOut_ms=0, unsigned int sleepDuration_us=100) const;
 
 
 
@@ -257,7 +257,7 @@ private:
     LONGLONG       previousTime;
 #else
     // Used to store the previous time (for computing timeout)
-    struct timeval      previousTime;
+    struct timeval      previousTime{};
 #endif
 };
 

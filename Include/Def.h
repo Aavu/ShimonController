@@ -21,7 +21,7 @@
 #define IAI_ACTUATOR "/dev/IAIactuator"
 #define IAI_ACTUATOR_BAUDRATE 230400
 
-#define STRIKER_HOST "192.168.2.31" //"169.254.60.1"
+#define STRIKER_HOST HOST //"169.254.60.1"
 #define STRIKER_PORT 1002
 
 #define NUM_ARMS 4
@@ -43,7 +43,6 @@ const int kOctavesToTry[NUM_OCTAVES_TO_TRY] = {0, 1, -1, 2};
 #define SHIMON_OSC_ROUTE "/shimon"
 
 #define HEAD_CMD_OSC_ROUTE "/head-commands"
-#define HEAD_CMD_OSC_PORT 30310
 
 #define COPLEY_PORT "/dev/copleyASCII"
 #define COPLEY_BAUDRATE 115200
@@ -54,10 +53,8 @@ const int kOctavesToTry[NUM_OCTAVES_TO_TRY] = {0, 1, -1, 2};
 #define DXL_BAUDRATE 57600
 
 #define HOMING_MANUAL "manual"
-#define HOMING_HARDSTOP "hardstop"
 
 #define MOTOR_HD "HD"
-#define MOTOR_DXL "dxl"
 
 namespace Port {
     enum class Head {

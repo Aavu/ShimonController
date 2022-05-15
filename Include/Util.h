@@ -6,6 +6,7 @@
 #define SHIMONCONTROLLER_UTIL_H
 
 #include <iostream>
+#include <chrono>
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -15,6 +16,18 @@
 
 class Util {
 public:
+    static void sleep_us(int micro) {
+        std::this_thread::sleep_for(std::chrono::microseconds (micro));
+    }
+
+    static void sleep_ms(int millis) {
+        std::this_thread::sleep_for(std::chrono::milliseconds (millis));
+    }
+
+    static void sleep_s(int seconds) {
+        std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    }
+
     static bool valueInArray(int value, const int* pArr, int len) {
         for (int i = 0; i < len; ++i) {
             if (value == pArr[i]) return true;

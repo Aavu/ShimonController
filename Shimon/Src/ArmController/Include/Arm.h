@@ -134,12 +134,21 @@ public:
     Error_t move(int position, float acceleration, float v_max) {
         if (m_iTarget == position) return kAlreadyThereError;
         int scPosition = getTargetInSliderCoordinate(position);
+//        Modbus::Message_t mbMsg {
+//                .armID = m_id,
+//                .position = scPosition,
+//                .precision = 0.1,
+//                .v_max = (int)std::round(v_max),
+//                .acceleration = acceleration,
+//                .push = 0
+//        };
+
         Modbus::Message_t mbMsg {
-                .armID = m_id,
-                .position = scPosition,
+                .armID = 0,
+                .position = 50,
                 .precision = 0.1,
-                .v_max = (int)std::round(v_max),
-                .acceleration = acceleration,
+                .v_max = 100,
+                .acceleration = 0.3,
                 .push = 0
         };
 

@@ -11,8 +11,12 @@
 #include "Logger.h"
 #include "SerialDevice.h"
 
-#define IAI_BUFFER_SIZE 64
+#define IAI_BUFFER_SIZE 256
+#define RTU_BUFFER_SIZE 256
+
 #define IAI_TIMEOUT 100 // ms
+
+#define ALL_ARMS -1
 
 class IAIController: Modbus {
 public:
@@ -61,18 +65,19 @@ public:
 
         static char line[16];
 
+        size_t length;
         for (int i=0; i<NUM_ARMS; ++i) {
             Error_t e;
-            e = query(i, asciiMsg, FC03, DSS1);
+            e = query(i, rtuMsg, &length, FC03, DSS1);
             ERROR_CHECK(e, false);
 
-            e = m_serialDevice.write(asciiMsg);
+            e = m_serialDevice.write(rtuMsg, length);
             ERROR_CHECK(e, false);
 
-            e = m_serialDevice.readline(line, '\n', 16, 50);
+            e = m_serialDevice.readBytes(rtuMsg, 6, 50);
             ERROR_CHECK(e, false);
 
-            RTU::DataReadResponse_t resp;
+            RTU::DataReadResponse_t resp{};
             e = parseDataReadResponse(line, resp);
             ERROR_CHECK(e, false);
 
@@ -84,37 +89,53 @@ public:
         return bHomed;
     }
 
-    Error_t write(const Modbus::Message_t& msg) {
+    Error_t write(const Modbus::Message_t& msg, MsgType msgType= MsgType::RTU) {
         if (!m_bInitialized) return kNotInitializedError;
         if (!m_bHomed) return kNotHomedError;
         Error_t e;
+
+        if (msgType == MsgType::RTU) {
+            size_t length;
+            e = computeRTU(msg, rtuMsg, &length);
+            ERROR_CHECK(e, e);
+
+            Util::sleep_us(200);
+            e = m_serialDevice.write(rtuMsg, length);
+            ERROR_CHECK(e, e);
+            Util::sleep_us(200);
+
+            return kNoError;
+        }
+
         e = computeAscii(msg, asciiMsg);
         ERROR_CHECK(e, e);
 
         return m_serialDevice.write(asciiMsg);
+
     }
 
     Error_t setServo(int armId, bool bOn = true) {
         if (!m_bInitialized) return kNotInitializedError;
         Error_t e;
-        e = Modbus::servoOn(armId, bOn, asciiMsg);
+        size_t length;
+        e = servoOn(armId, bOn, rtuMsg, &length);
         ERROR_CHECK(e, e);
 
-        return m_serialDevice.write(asciiMsg);
+        return m_serialDevice.write(rtuMsg, length);
     }
 
     Error_t home() {
         if (!m_bInitialized) return kNotInitializedError;
         LOG_INFO("Homing IAI Actuators");
-        for (int i=0; i<NUM_ARMS; ++i) {
-            Error_t e;
-            e = Modbus::home(i, asciiMsg);
-            ERROR_CHECK(e, e);
+        size_t length;
 
-            e = m_serialDevice.write(asciiMsg);
-            ERROR_CHECK(e, e);
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
+        Error_t e;
+        e = Modbus::home(ALL_ARMS, rtuMsg, &length);
+        ERROR_CHECK(e, e);
+
+        e = m_serialDevice.write(rtuMsg, length);
+        ERROR_CHECK(e, e);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 #ifndef SIMULATE
         int i = 0;
@@ -134,14 +155,15 @@ public:
     Error_t updateStats(int armId) {
         if (!m_bInitialized) return kNotInitializedError;
         Error_t e;
-        char buf[IAI_BUFFER_SIZE];
-        e = Modbus::queryAll(armId, buf, FC03);
+        uint8_t buf[RTU_BUFFER_SIZE];
+        size_t length;
+        e = Modbus::queryAll(armId, buf, &length, FC03);
         ERROR_CHECK(e, e);
 
-        e = m_serialDevice.write(buf);
+        e = m_serialDevice.write(buf, length);
         ERROR_CHECK(e, e);
 
-        e = m_serialDevice.readline(buf, '\n', IAI_BUFFER_SIZE, IAI_TIMEOUT);
+        e = m_serialDevice.readBytes(buf, length, IAI_TIMEOUT);
         ERROR_CHECK(e, e);
 
         RTU::DataReadResponse_t msg{};
@@ -160,9 +182,10 @@ private:
     SerialDevice m_serialDevice;
 
     bool m_bHomed = false;
-    RTU::MultiRegResponse_t m_status[NUM_ARMS];
+    RTU::MultiRegResponse_t m_status[NUM_ARMS]{};
 
     static inline char asciiMsg[IAI_BUFFER_SIZE];
+    static inline uint8_t rtuMsg[RTU_BUFFER_SIZE];
 
     IAIController() = default;
     ~IAIController() = default;
