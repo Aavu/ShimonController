@@ -1,0 +1,80 @@
+# Motor config file for Shimon Head
+-
+  axis: 0
+  name: basePan
+  type: HD          # HD / Dxl
+  homing: hardstop  # hardstop / manual
+  zeroEnc: 208000   # logical zero encoder ticks - logical 0
+  scale: 159155     # encoder ticks per radian
+  min: -1.25        # radians
+  max: 1.25         # radians
+  maxVel: 5.0       # rad/s
+  maxAcc: 0.3       # rad/s/s
+  default: 0        # radians
+  defaultVel: 7.0   # default Velocity
+-
+  axis: 1
+  name: neck
+  type: HD          # HD / Dxl
+  homing: hardstop  # hardstop / manual
+  zeroEnc: 95000    # logical zero encoder ticks - logical 0
+  scale: 159155     # encoder ticks per radian
+  min: -0.5         # radians
+  max: 0.9          # radians
+  maxVel: 15.0      # rad/s
+  maxAcc: 0.45      # rad/s/s
+  default: 0        # radians
+  defaultVel: 4.0   # default Velocity
+-
+  axis: 2
+  name: neckPan
+  type: HD          # HD / Dxl
+  homing: manual    # hardstop / manual
+  zeroEnc: 0        # logical zero encoder ticks - logical 0
+  scale: 63662      # encoder ticks per radian
+  min: -1.1         # radians
+  max: 1.1          # radians
+  maxVel: 25        # rad/s
+  maxAcc: 4.3       # rad/s/s
+  default: 0        # radians
+  defaultVel: 10.0  # default Velocity
+-
+  axis: 3
+  name: headTilt
+  type: HD            # HD / Dxl
+  homing: hardstop    # hardstop / manual
+  zeroEnc: 115000     # logical zero encoder ticks - logical 0
+  scale: 35000        # encoder ticks per radian
+  min: -1.0           # 90 deg down
+  max: 1.0            # 90 deg up
+  maxVel: 20          # rad/s
+  maxAcc: 1.6         # rad/s/s
+  default: 0          # radians
+  defaultVel: 8.0     # default Velocity
+-
+  axis: 4
+  name: mouth
+  type: Dxl         # HD / Dxl
+  homing: manual    # dxl does not need homing
+  zeroEnc: 200      # encoder ticks
+  scale: 1303.7973  # (4096 / pi) encoder ticks per radian
+  min: 0            # radians - change after checking hardware limit
+  max: 0.76         # radians - change after checking hardware limit
+  maxVel: 0.784     # rad/s
+  maxAcc: 0.914     # rad/s/s
+  default: 0        # radians
+  defaultVel: 0     # default velocity -> max rpm is used
+-
+  axis: 5
+  name: eyeBrow
+  type: Dxl         # HD / Dxl
+  homing: manual    # dxl does not need homing
+  zeroEnc: 1350     # encoder ticks
+  scale: 1303.7973  # (4096 / pi) encoder ticks per radian
+  min: 0            # radians - change after checking hardware limit
+  max: .345         # radians - change after checking hardware limit
+  maxVel: 0.784     # rad/s
+  maxAcc: 0.914     # rad/s/s
+  default: 0        # radians
+  defaultVel: 0     # default velocity -> max rpm is used
+
