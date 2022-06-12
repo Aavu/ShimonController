@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.22)
 project(ShimonController)
 
 set(CMAKE_CXX_STANDARD 17)
-SET(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_BUILD_TYPE Debug)
+
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_DEBUG)
 
 set(ARM_CONTROLLER_LIB ArmController)
 set(HEAD_CONTROLLER_LIB HeadController)

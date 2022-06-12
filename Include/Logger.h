@@ -4,6 +4,9 @@
 
 #ifndef SHIMONCONTROLLER_LOGGER_H
 #define SHIMONCONTROLLER_LOGGER_H
+
+//#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+
 #include "spdlog/spdlog.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
 
@@ -22,11 +25,11 @@ public:
         n_levels
     };
 
-//    static void init(Level level = trace) {
-////        spdlog::set_pattern("%^[%r]\t[%s]\t[line %#]\t[---%l---]\t%v%$");
-//        spdlog::set_level((spdlog::level::level_enum)level);
-//        SPDLOG_INFO("Logger initialized");
-//    }
+    static void init(Level level = trace) {
+//        spdlog::set_pattern("%^[%r]\t[%s]\t[line %#]\t[---%l---]\t%v%$");
+        spdlog::set_level((spdlog::level::level_enum)level);
+        SPDLOG_INFO("Logger initialized");
+    }
 };
 
 #define LOG_TRACE(...)      SPDLOG_TRACE    (__VA_ARGS__)

@@ -170,6 +170,7 @@ char serialib::init(unsigned int Bauds, SerialDataBits dataBits, SerialParity Pa
     // Ignore modem control lines (CLOCAL) and Enable receiver (CREAD)
     m_options.c_cflag |= ( CLOCAL | CREAD | databits_flag | parity_flag | stopbits_flag);
     m_options.c_iflag |= ( IGNPAR | IGNBRK );
+//    m_options.c_lflag &= ~(ICANON);
     // Timer unused
     m_options.c_cc[VTIME]=0;
     // At least on character before satisfy reading
@@ -462,10 +463,15 @@ int serialib::readBytes (void *buffer,unsigned int maxNbBytes,unsigned int timeO
     // While Timeout is not reached
     while (timer.elapsedTime_ms()<timeOut_ms || timeOut_ms==0)
     {
+//        auto l = available();
+//        if (l < maxNbBytes) {
+//            usleep(sleepDuration_us);
+//            continue;
+//        }
         // Compute the position of the current byte
         unsigned char* Ptr=(unsigned char*)buffer+NbByteRead;
         // Try to read a byte on the device
-        int Ret=read(m_fd, (void*)Ptr, maxNbBytes - NbByteRead);
+        ssize_t Ret=read(m_fd, (void*)Ptr, maxNbBytes - NbByteRead);
         // Error while reading
         if (Ret==-1) return -2;
 
@@ -482,6 +488,9 @@ int serialib::readBytes (void *buffer,unsigned int maxNbBytes,unsigned int timeO
         usleep (sleepDuration_us);
     }
     // Timeout reached, return the number of bytes read
+//    if (NbByteRead == 0) {
+//        int a = 0;
+//    }
     return (int)NbByteRead;
 }
 
@@ -764,7 +773,7 @@ void timeOut::initTimer()
 }
 
 /*!
-    \brief      Returns the time elapsed since initialization.  It write the current time of the day in the structure CurrentTime.
+    \brief      Returns the time elapsed since initialization.  It setPosition the current time of the day in the structure CurrentTime.
                 Then it returns the difference between CurrentTime and PreviousTime.
     \return     The number of microseconds elapsed since the functions InitTimer was called.
   */

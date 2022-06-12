@@ -14,7 +14,9 @@ enum class ArmCommand {
     Unknown = -1,
     Off = 0,
     On = 1,
-    Home = 2
+    Home = 2,
+    AlarmClear=3,
+    Reset=4
 };
 
 enum class ArmCommandType {
@@ -56,6 +58,8 @@ public:
             {ArmCommand::Off,     "OFF"       },
             {ArmCommand::On,      "ON"        },
             {ArmCommand::Home,    "HOME"      },
+            {ArmCommand::AlarmClear, "CLEAR"  },
+            {ArmCommand::Reset, "RESTART"}
     };
     static inline std::unordered_map<std::string, ArmCommand> strCmdMap;
 };

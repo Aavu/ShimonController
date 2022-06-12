@@ -24,6 +24,7 @@ public:
 
     Error_t openPort(const std::string& device) {
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Opening '{}'", device);
 #ifndef SIMULATE
         if (!m_serial.isDeviceOpen())
             if (m_serial.openDevice(device.c_str()) != 0) return kFileOpenError;
@@ -31,15 +32,16 @@ public:
         return kNoError;
     }
 
-    [[nodiscard]] bool isPortOpen() const {
+    [[nodiscard]] bool isPortOpen() {
 #ifndef SIMULATE
         return m_serial.isDeviceOpen();
 #endif
-        return true;
+        return false;
     }
 
     Error_t init(int iBaudrate) {
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Initializing Serial port with baudrate: {}", iBaudrate);
 #ifndef SIMULATE
         if (!m_serial.isDeviceOpen()) return kNotOpenedError;
         if (m_serial.init(iBaudrate) != 1) return kNotInitializedError;
@@ -51,6 +53,7 @@ public:
 
     Error_t reset() {
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Resetting Serial port");
 #ifndef SIMULATE
         if (m_serial.isDeviceOpen()) m_serial.closeDevice();
 #endif
@@ -58,9 +61,19 @@ public:
         return kNoError;
     }
 
+    Error_t flush() {
+        if (!m_bInitialized) return kNotInitializedError;
+        std::lock_guard<std::mutex> lk(m_mtx);
+#ifndef SIMULATE
+        if (m_serial.flushReceiver() == 0) return kFlushError;
+#endif
+        return kNoError;
+    }
+
     Error_t write(const std::string& msg) {
         if (!m_bInitialized) return kNotInitializedError;
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Serial write msg (string): {}", msg);
 #ifndef SIMULATE
         if (m_serial.writeString(msg.c_str()) != 1) return kWriteError;
 #endif
@@ -70,6 +83,7 @@ public:
     Error_t write(const char* msg) {
         if (!m_bInitialized) return kNotInitializedError;
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Serial write msg (const char*): {}", msg);
 #ifndef SIMULATE
         if (m_serial.writeString(msg) != 1) return kWriteError;
 #endif
@@ -85,14 +99,13 @@ public:
         return kNoError;
     }
 
-    Error_t readline(char* line, char finalChar='\n', int maxNbBytes=64, unsigned int timeout_ms=0) {
+    int readline(char* line, char finalChar='\n', int maxNbBytes=64, unsigned int timeout_ms=0) {
         if (!m_bInitialized) return kNotInitializedError;
         std::lock_guard<std::mutex> lk(m_mtx);
 #ifndef SIMULATE
-        int _n = m_serial.readString(line, finalChar, maxNbBytes, timeout_ms);
-        if (_n != maxNbBytes) return kReadError;
+        return m_serial.readString(line, finalChar, maxNbBytes, timeout_ms);
 #endif
-        return kNoError;
+        return maxNbBytes;
     }
 
     Error_t readBytes(uint8_t* buf, size_t length=64, unsigned int timeout_ms=0) {
@@ -100,13 +113,20 @@ public:
         std::lock_guard<std::mutex> lk(m_mtx);
 #ifndef SIMULATE
         int _n = m_serial.readBytes(buf, length, timeout_ms);
-        if (_n != length) return kReadError;
+        if (_n == 0) {
+            LOG_ERROR("Serial Read Timeout");
+            return kTimeoutError;
+        } else if (_n != length) {
+            LOG_ERROR("Read Error. Read {} bytes. Expected {} bytes", _n, length);
+            return kReadError;
+        }
 #endif
         return kNoError;
     }
 
     [[nodiscard]] Error_t sendBreak(int time=0) {
         std::lock_guard<std::mutex> lk(m_mtx);
+        LOG_TRACE("Sending Serial Break");
 #ifndef SIMULATE
         if (m_serial.sendBreak(time) != 0) return kSetValueError;
 #endif

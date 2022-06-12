@@ -32,9 +32,9 @@ void Shimon::stop() {
     LOG_TRACE("Shimon Stopped...");
 }
 
-Error_t Shimon::initArms(const std::string& strikerHost, int strikerPort, const std::string& devArm, int iArmBaudrate) {
+Error_t Shimon::initArms() {
     LOG_INFO("Initializing Arms");
-    return m_armController.init(strikerHost, strikerPort, devArm, iArmBaudrate);
+    return m_armController.init();
 }
 
 Error_t Shimon::initHead() {

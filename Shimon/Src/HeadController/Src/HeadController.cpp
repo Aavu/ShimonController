@@ -24,7 +24,9 @@ Error_t HeadController::init(bool shouldHome) {
         headCallback(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2), std::forward<decltype(PH3)>(PH3));
     });
 
-    Error_t e = m_motorController.init(shouldHome);
+    Error_t e;
+
+    e = m_motorController.init(shouldHome);
     ERROR_CHECK(e, e);
 
     m_bInitialized = true;

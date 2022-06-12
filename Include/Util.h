@@ -75,6 +75,27 @@ public:
         if (c >= 'a' && c <= 'f') return c - 'a' + 10;
         return -1;
     }
+
+    // Refer: https://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to-reverse-the-order-of-bits-in-a-byte
+    static uint8_t reverseBits(uint8_t num) {
+        return (_bitRevLUT[num & 0xF] << 4) | _bitRevLUT[num >> 4];
+    }
+
+    // [1, 3, 2, 4]
+    static uint8_t computeStrikerId(const std::list<int>& strikerIds) {
+        if (strikerIds.empty()) return -1;
+
+        uint8_t id = 0;
+        for (const int& i: strikerIds) id += (1 << i);
+
+        return id;
+    }
+
+private:
+    static constexpr uint8_t _bitRevLUT[] = {
+        0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe,
+        0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf
+    };
 };
 
 #endif //SHIMONCONTROLLER_UTIL_H

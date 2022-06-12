@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <climits>
+#include <bitset>
 #include <chrono>
 #include <thread>
 #include <future>
@@ -29,10 +30,16 @@
 #include "ErrorDef.h"
 #include "Logger.h"
 
+// Only for Debugging
+#include <csignal>
+
 using namespace std::chrono;
+
+#define NUM_ARM_THREADS 32
 
 class ArmController {
 public:
+    typedef std::chrono::steady_clock::time_point _tp;
     struct Message_t {
         int arm_id;
         int target;
@@ -41,7 +48,9 @@ public:
         int midiNote;
         int midiVelocity;
         uint8_t strikerId;
-        float time_ms;
+        int time_ms;
+//        _tp arrivalTime;
+//        _tp msgTime;
 
         void pprint() const {
             std::bitset<8> sId(strikerId);
@@ -58,7 +67,7 @@ public:
 
     ArmController(OscListener& oscListener, size_t cmdBufferSize);
     ~ArmController();
-    Error_t init(const std::string& strikerHost, int strikerPort, const std::string& devArm, int iArmBaudrate);
+    Error_t init();
     Error_t initMasterTransmitter(const std::string& host, int port);
 
     Error_t reset();
@@ -67,6 +76,8 @@ public:
 
     Error_t servosOn(bool bTurnOn = true);
     Error_t home();
+
+    Error_t clearFault();
 
 private:
     bool m_bInitialized = false;
@@ -81,12 +92,17 @@ private:
     StrikerController m_strikerController;
 
     std::unique_ptr<std::thread> m_pMasterTransmitThread = nullptr;
-    std::unique_ptr<std::thread> m_pThread = nullptr;
-    std::unique_ptr<std::thread> m_pStrikerThread = nullptr;
+//    std::unique_ptr<std::thread> m_pThread = nullptr;
     std::unique_ptr<std::thread> m_pStatusQueryThread = nullptr;
 
-    std::mutex m_mtx;
+    std::unique_ptr<std::thread> m_pThreadPool[NUM_ARM_THREADS];
+
+    std::mutex m_mtx, m_oscMtx;
     std::condition_variable m_cv;
+
+    volatile std::atomic<bool> m_bUpdatePosition = true;
+    std::mutex m_newCmdMtx;
+    std::condition_variable m_newCmdCv;
 
     IAIController& m_IAIController;
 
@@ -96,8 +112,7 @@ private:
 
     void masterTransmitHandler();
 
-    void threadHandler();
-//    void strikerThreadHandler();
+    void threadPoolHandler();
     void statusQueryHandler();
 
     void strikerMidiCallback(char type, uint8_t strikerIds, uint8_t midiVelocity);

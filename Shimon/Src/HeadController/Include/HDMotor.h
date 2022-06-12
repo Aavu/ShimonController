@@ -17,10 +17,10 @@ public:
 
     Error_t init(MotorConfig_t&& mc) final {
         Error_t e;
-        e = Motor::init(std::move(mc));
+        e = m_pController->init(COPLEY_PORT, COPLEY_BAUDRATE);
         ERROR_CHECK(e, e);
 
-        e = m_pController->init(COPLEY_PORT, COPLEY_BAUDRATE);
+        e = Motor::init(std::move(mc));
         ERROR_CHECK(e, e);
 
         m_bInitialized = true;
@@ -42,6 +42,7 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         e = servoOn(false);
         ERROR_CHECK(e, e);
+
         m_bInitialized = false;
         return kNoError;
     }
@@ -99,7 +100,10 @@ public:
     }
 
     bool isHomed() override {
+#ifndef SIMULATE
         return m_pController->queryHomeEnd(m_config.axis) == 1;
+#endif
+        return true;
     }
 
 private:

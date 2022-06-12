@@ -55,6 +55,15 @@ namespace RTU {
         uint16_t startAddr;
         uint16_t numRegisters;
         uint16_t errorCheck;
+
+        bool operator==(const PositioningDataQuery_t& rhs) const {
+            if (slaveAddr != rhs.slaveAddr) return false;
+            if (functionCode != rhs.functionCode) return false;
+            if (startAddr != rhs.startAddr) return false;
+            if (numRegisters != rhs.startAddr) return false;
+
+            return true;
+        }
     };
 
     struct DataReadQuery_t {
@@ -133,13 +142,23 @@ public:
         return _packRTU(msg, ret, pLength);
     }
 
+    [[nodiscard]] static Error_t normalStatus(int armId, uint8_t* ret = nullptr, size_t* pLength= nullptr) {
+        RTU::CtrlInfo_t msg = {
+                .functionCode = 0x05,
+                .startAddr = 0x040B,
+                .data = 0x0000,
+        };
+        msg.slaveAddr = armId + 1;
+        return _packRTU(msg, ret, pLength);
+    }
+
     [[nodiscard]] static Error_t home(int armId, uint8_t* ret = nullptr, size_t* pLength= nullptr) {
 //        static RTU::CtrlInfo_t msg = {
 //                .functionCode = 0x06,
 //                .startAddr = 0x0D00,
 //                .data = 0x1010,
 //        };
-        static RTU::CtrlInfo_t msg = {
+        RTU::CtrlInfo_t msg = {
                 .functionCode = 0x05,
                 .startAddr = 0x040B,
                 .data = 0xFF00,
@@ -208,15 +227,14 @@ public:
 
 #ifndef SIMULATE
         if (msg.errorCheck != crc) {
-            LOG_ERROR("Data corrupted. Received LRC: {}, Computed LRC: {}", msg.errorCheck, crc);
+            LOG_ERROR("Data corrupted. Received CRC: {}, Computed CRC: {}", msg.errorCheck, crc);
             return kCorruptedDataError;
         }
 #endif
         return kNoError;
     }
 
-    static Error_t computeAscii(const Message_t& msg, char* ret = nullptr) {
-        RTU::PositioningDataQuery_t query{};
+    static Error_t computeAscii(const Message_t& msg, RTU::PositioningDataQuery_t& query, char* ret = nullptr) {
         Error_t e;
         static const uint8_t kNumRegisters = 9;
         uint16_t data[kNumRegisters]{};
@@ -239,13 +257,28 @@ public:
     }
 
     [[nodiscard]] static Error_t home(int armId, char* ret = nullptr) {
-        static RTU::CtrlInfo_t msg = {
-                .functionCode = 0x06,
-                .startAddr = 0x0D00,
-                .data = 0x1010,
+//        static RTU::CtrlInfo_t msg = {
+//                .functionCode = 0x06,
+//                .startAddr = 0x0D00,
+//                .data = 0x1010,
+//        };
+        RTU::CtrlInfo_t msg = {
+                .functionCode = 0x05,
+                .startAddr = 0x040B,
+                .data = 0xFF00,
         };
         msg.slaveAddr = armId + 1;
-        return _toAscii(msg, ret);;
+        return _toAscii(msg, ret);
+    }
+
+    [[nodiscard]] static Error_t normalStatus(int armId, char* ret = nullptr) {
+        RTU::CtrlInfo_t msg = {
+                .functionCode = 0x05,
+                .startAddr = 0x040B,
+                .data = 0x0000,
+        };
+        msg.slaveAddr = armId + 1;
+        return _toAscii(msg, ret);
     }
 
     [[nodiscard]] static Error_t alarmReset(uint8_t armId, char* ret) {
@@ -254,6 +287,17 @@ public:
                 .functionCode = 0x05,
                 .startAddr = 0x0407,
                 .data = 0xFF00,
+        };
+
+        return _toAscii(msg, ret);
+    }
+
+    [[nodiscard]] static Error_t alarmNormal(uint8_t armId, char* ret) {
+        RTU::CtrlInfo_t msg = {
+                .slaveAddr = uint8_t(armId + 1),
+                .functionCode = 0x05,
+                .startAddr = 0x0407,
+                .data = 0x0000,
         };
 
         return _toAscii(msg, ret);
@@ -287,6 +331,28 @@ public:
         return _toAscii(temp, query);
     }
 
+    static Error_t parsePositioningDataResponse(const char* response, RTU::PositioningDataResponse_t& msg) {
+        if (!response) return kInvalidArgsError;
+
+        msg.slaveAddr = Util::strtoi(&response[1], 2);
+        msg.functionCode = Util::strtoi(&response[3], 2);
+        msg.startAddr = Util::strtoi(&response[5], 4);
+        msg.numRegisters = Util::strtoi(&response[9], 4);
+        msg.errorCheck = Util::strtoi(&response[13], 2);
+
+        char temp[16];
+        memcpy(temp, response, 15);
+        temp[15] = 0;
+        int lrc = _computeLrc8(temp, 12);
+
+        if (msg.errorCheck != lrc) {
+            LOG_ERROR("Data corrupted. Received LRC: {}, Computed LRC: {}", msg.errorCheck, lrc);
+            return kCorruptedDataError;
+        }
+
+        return kNoError;
+    }
+
     static Error_t parseDataReadResponse(const char* response, RTU::DataReadResponse_t& msg) {
         if (!response) return kInvalidArgsError;
 
@@ -317,7 +383,7 @@ public:
     static Error_t parseQueryAllResponse(const uint16_t* pData, RTU::MultiRegResponse_t& msg) {
         if (!pData) return kInvalidArgsError;
 
-        msg.position = (int32_t)((pData[1] << 16) + pData[0]);
+        msg.position = (int32_t)((pData[0] << 16) + pData[1]);
         msg.alarm = pData[2];
         msg.inputPort = pData[3];
         msg.outputPort = pData[4];
@@ -505,7 +571,7 @@ private:
     static uint8_t _computeLrc8(const char* msg, size_t len) {
         uint8_t sum = 0;
         char temp[3];
-        temp[2] = '\0';
+        temp[2] = 0;
         for (int i=1; i < len; i += 2) {
             temp[0] = msg[i];
             temp[1] = msg[i+1];

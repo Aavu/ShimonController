@@ -407,28 +407,28 @@ class WINDECLSPEC PacketHandler
   virtual int read4ByteTxRx   (PortHandler *port, uint8_t id, uint16_t address, uint32_t *data, uint8_t *error = 0) = 0;
 
   ////////////////////////////////////////////////////////////////////////////////
-  /// @brief The function that transmits INST_WRITE instruction packet with the data for write
-  /// @description The function makes an instruction packet with INST_WRITE and the data for write,
+  /// @brief The function that transmits INST_WRITE instruction packet with the data for setPosition
+  /// @description The function makes an instruction packet with INST_WRITE and the data for setPosition,
   /// @description transmits the packet with PacketHandler::txPacket().
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param length Length of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param length Length of the data for setPosition
+  /// @param data Data for setPosition
   /// @return communication results which come from PacketHandler::txPacket()
   ////////////////////////////////////////////////////////////////////////////////
   virtual int writeTxOnly     (PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data) = 0;
 
   ////////////////////////////////////////////////////////////////////////////////
-  /// @brief The function that transmits INST_WRITE instruction packet with the data for write, and receives the packet
-  /// @description The function makes an instruction packet with INST_WRITE and the data for write,
+  /// @brief The function that transmits INST_WRITE instruction packet with the data for setPosition, and receives the packet
+  /// @description The function makes an instruction packet with INST_WRITE and the data for setPosition,
   /// @description transmits and receives the packet with PacketHandler::txRxPacket(),
   /// @description gets the error from the packet.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param length Length of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param length Length of the data for setPosition
+  /// @param data Data for setPosition
   /// @param error Dynamixel hardware error
   /// @return communication results which come from PacketHandler::txRxPacket()
   ////////////////////////////////////////////////////////////////////////////////
@@ -439,8 +439,8 @@ class WINDECLSPEC PacketHandler
   /// @description The function calls PacketHandler::writeTxOnly() for writing 1 byte data.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @return communication results which come from PacketHandler::writeTxOnly()
   ////////////////////////////////////////////////////////////////////////////////
   virtual int write1ByteTxOnly(PortHandler *port, uint8_t id, uint16_t address, uint8_t data) = 0;
@@ -451,8 +451,8 @@ class WINDECLSPEC PacketHandler
   /// @description gets the error from the packet.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @param error Dynamixel hardware error
   /// @return communication results which come from PacketHandler::writeTxRx()
   ////////////////////////////////////////////////////////////////////////////////
@@ -463,8 +463,8 @@ class WINDECLSPEC PacketHandler
   /// @description The function calls PacketHandler::writeTxOnly() for writing 2 byte data.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @return communication results which come from PacketHandler::writeTxOnly()
   ////////////////////////////////////////////////////////////////////////////////
   virtual int write2ByteTxOnly(PortHandler *port, uint8_t id, uint16_t address, uint16_t data) = 0;
@@ -475,8 +475,8 @@ class WINDECLSPEC PacketHandler
   /// @description gets the error from the packet.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @param error Dynamixel hardware error
   /// @return communication results which come from PacketHandler::writeTxRx()
   ////////////////////////////////////////////////////////////////////////////////
@@ -487,8 +487,8 @@ class WINDECLSPEC PacketHandler
   /// @description The function calls PacketHandler::writeTxOnly() for writing 4 byte data.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @return communication results which come from PacketHandler::writeTxOnly()
   ////////////////////////////////////////////////////////////////////////////////
   virtual int write4ByteTxOnly(PortHandler *port, uint8_t id, uint16_t address, uint32_t data) = 0;
@@ -499,8 +499,8 @@ class WINDECLSPEC PacketHandler
   /// @description gets the error from the packet.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param data Data for setPosition
   /// @param error Dynamixel hardware error
   /// @return communication results which come from PacketHandler::writeTxRx()
   ////////////////////////////////////////////////////////////////////////////////
@@ -513,9 +513,9 @@ class WINDECLSPEC PacketHandler
   /// @description The data written in the register will act when INST_ACTION instruction packet is transmitted to the Dynamixel.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param length Length of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param length Length of the data for setPosition
+  /// @param data Data for setPosition
   /// @return communication results which come from PacketHandler::txPacket()
   ////////////////////////////////////////////////////////////////////////////////
   virtual int regWriteTxOnly  (PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data) = 0;
@@ -528,9 +528,9 @@ class WINDECLSPEC PacketHandler
   /// @description The data written in the register will act when INST_ACTION instruction packet is transmitted to the Dynamixel.
   /// @param port PortHandler instance
   /// @param id Dynamixel ID
-  /// @param address Address of the data for write
-  /// @param length Length of the data for write
-  /// @param data Data for write
+  /// @param address Address of the data for setPosition
+  /// @param length Length of the data for setPosition
+  /// @param data Data for setPosition
   /// @param error Dynamixel hardware error
   /// @return communication results which come from PacketHandler::txRxPacket()
   ////////////////////////////////////////////////////////////////////////////////

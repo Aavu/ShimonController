@@ -80,8 +80,8 @@ class WINDECLSPEC GroupBulkWrite
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief The function that adds id, start_address, data_length to the Bulk Write list
   /// @param id Dynamixel ID
-  /// @param start_address Address of the data for write
-  /// @param data_length Length of the data for write
+  /// @param start_address Address of the data for setPosition
+  /// @param data_length Length of the data for setPosition
   /// @return false
   /// @return   when the ID exists already in the list
   /// @return or true
@@ -95,10 +95,10 @@ class WINDECLSPEC GroupBulkWrite
   void    removeParam (uint8_t id);
 
   ////////////////////////////////////////////////////////////////////////////////
-  /// @brief The function that changes the data for write in id -> start_address -> data_length to the Bulk Write list
+  /// @brief The function that changes the data for setPosition in id -> start_address -> data_length to the Bulk Write list
   /// @param id Dynamixel ID
-  /// @param start_address Address of the data for write
-  /// @param data_length Length of the data for write
+  /// @param start_address Address of the data for setPosition
+  /// @param data_length Length of the data for setPosition
   /// @param data for replacement
   /// @return false
   /// @return   when the ID doesn't exist in the list

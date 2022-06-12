@@ -138,7 +138,7 @@ class PortHandlerMac : public PortHandler
   /// @description The function writes bytes on the port buffer,
   /// @description and returns a number of bytes which are successfully written.
   /// @param packet Buffer which would be written on the port buffer
-  /// @param length Length of the buffer for write
+  /// @param length Length of the buffer for setPosition
   /// @return -1
   /// @return   when error was occurred
   /// @return or Length of bytes written

@@ -56,8 +56,8 @@ class WINDECLSPEC GroupSyncWrite
   /// @brief The function that Initializes instance for Sync Write
   /// @param port PortHandler instance
   /// @param ph PacketHandler instance
-  /// @param start_address Address of the data for write
-  /// @param data_length Length of the data for write
+  /// @param start_address Address of the data for setPosition
+  /// @param data_length Length of the data for setPosition
   ////////////////////////////////////////////////////////////////////////////////
   GroupSyncWrite(PortHandler *port, PacketHandler *ph, uint16_t start_address, uint16_t data_length);
 
@@ -81,7 +81,7 @@ class WINDECLSPEC GroupSyncWrite
   ////////////////////////////////////////////////////////////////////////////////
   /// @brief The function that adds id, start_address, data_length to the Sync Write list
   /// @param id Dynamixel ID
-  /// @param data Data for write
+  /// @param data Data for setPosition
   /// @return false
   /// @return   when the ID exists already in the list
   /// @return or true
@@ -95,7 +95,7 @@ class WINDECLSPEC GroupSyncWrite
   void    removeParam (uint8_t id);
 
   ////////////////////////////////////////////////////////////////////////////////
-  /// @brief The function that changes the data for write in id -> start_address -> data_length to the Sync Write list
+  /// @brief The function that changes the data for setPosition in id -> start_address -> data_length to the Sync Write list
   /// @param id Dynamixel ID
   /// @param data for replacement
   /// @return false

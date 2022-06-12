@@ -21,7 +21,9 @@
 
 class MotorController {
 public:
-    explicit MotorController(std::string  configFile) :m_configFile(std::move(configFile)) {}
+    explicit MotorController(std::string  configFile) :m_configFile(std::move(configFile)) {
+
+    }
 
     Error_t init(bool shouldHome = true) {
         Error_t e;
@@ -41,6 +43,8 @@ public:
             }
         }
 
+        e = CopleyASCIIController::getInstance().reset();
+        ERROR_CHECK(e, e);
         return kNoError;
     }
 

@@ -35,10 +35,12 @@ public:
     Error_t init(const std::string& port, int iBaudrate) {
         Error_t e;
 
+#ifndef SIMULATE
         if (m_serialDevice.isPortOpen()) {
             LOG_DEBUG("{} already Open...", port);
             return kNoError;
         }
+#endif
 
         e = m_serialDevice.openPort(port);
         ERROR_CHECK(e, e);
@@ -50,15 +52,18 @@ public:
         e = m_serialDevice.sendBreak();
         ERROR_CHECK(e, e);
 
+#ifndef SIMULATE
         LOG_INFO("Current Baudrate: {}", getBaudrate());
-
+#endif
         e = changeBaudrate(iBaudrate);
         ERROR_CHECK(e, e);
 
+        m_bInitialized = true;
         return kNoError;
     }
 
     Error_t reset() {
+        if (!m_bInitialized) return kNoError;
         Error_t e;
 
         e = resetDrive();
@@ -86,8 +91,10 @@ public:
 
         e = m_serialDevice.init(iBaudrate);
         ERROR_CHECK(e, e);
-        m_bInitialized = true;
+
+#ifndef SIMULATE
         LOG_INFO("New Baudrate: {}", getBaudrate());
+#endif
         return kNoError;
     }
 
@@ -386,15 +393,15 @@ private:
         sprintf(line, "ok\r");
         n = 32;
 #else
-        Error_t e;
-        e = m_serialDevice.readline(line, '\r', 32, PATIENCE);
-        if (e != kNoError) {
+        n = m_serialDevice.readline(line, '\r', 32, PATIENCE);
+#endif
+        if (n == 0) {
             LOG_WARN("timeout reached...");
             return kTimeoutError;
+        } else if (n < 0) {
+            return kReadError;
         }
-#endif
-        if (n > 0) return kNoError;
-        return kReadError;
+        return kNoError;
     }
 };
 

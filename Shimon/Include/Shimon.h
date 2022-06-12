@@ -16,7 +16,7 @@
 class Shimon {
 public:
     Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize);
-    Error_t initArms(const std::string& strikerHost, int strikerPort, const std::string& devArm, int iArmBaudrate);
+    Error_t initArms();
     Error_t initHead();
     void start();
     void stop();
