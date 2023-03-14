@@ -58,8 +58,13 @@ public:
         m_bRunning = false;
     }
 
+    unsigned long getHost() const { return m_ulHostAddr; }
+    int getPort() const { return m_iPort; }
+
 protected:
     void ProcessMessage( const osc::ReceivedMessage& m, const IpEndpointName& remoteEndpoint ) override {
+        m_ulHostAddr = remoteEndpoint.address;
+        m_iPort = remoteEndpoint.port;
         try{
             osc::uint32 count = m.ArgumentCount();
             osc::ReceivedMessageArgumentStream args = m.ArgumentStream();
@@ -84,6 +89,8 @@ protected:
 
 private:
     UdpListeningReceiveSocket m_socket;
+    unsigned long m_ulHostAddr = 0;
+    int m_iPort = 0;
     std::atomic<bool> m_bRunning = false;
     std::function<void(int, int)> m_armMidiCallback = nullptr;
     std::function<void(int, int, float, float)> m_armCallback = nullptr;

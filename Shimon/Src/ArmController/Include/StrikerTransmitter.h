@@ -55,7 +55,7 @@ public:
         for (int i=0; i<STRIKER_BUFFER_SIZE; ++i) {
             ss << (int)buf[i] << " ";
         }
-        LOG_TRACE("Striker msg: {}", ss.str());
+//        LOG_DEBUG("Striker msg: {}", ss.str());
 
         Error_t e = m_sender.send(buf, STRIKER_BUFFER_SIZE);
         ERROR_CHECK(e, e);

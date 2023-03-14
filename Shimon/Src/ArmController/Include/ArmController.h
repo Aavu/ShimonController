@@ -6,6 +6,7 @@
 #define SHIMONCONTROLLER_ARMCONTROLLER_H
 
 #include <iostream>
+#include <fstream>
 #include <climits>
 #include <bitset>
 #include <chrono>
@@ -18,10 +19,10 @@
 #include "Arm.h"
 #include "StrikerController.h"
 #include "OscListener.h"
-#include "Trajectory.h"
+#include "OscTransmitter.h"
+#include "SliderModel.h"
 #include "ArmCommands.h"
 #include "CommandManager.h"
-//#include "OscTransmitter.h"
 #include "IAIController.h"
 #include "Modbus.h"
 #include "SerialDevice.h"
@@ -32,6 +33,7 @@
 
 // Only for Debugging
 #include <csignal>
+#include <utility>
 
 using namespace std::chrono;
 
@@ -68,9 +70,9 @@ public:
     ArmController(OscListener& oscListener, size_t cmdBufferSize);
     ~ArmController();
     Error_t init();
-    Error_t initMasterTransmitter(const std::string& host, int port);
 
     Error_t reset();
+    Error_t resetArms();
     Error_t start();
     Error_t stop();
 
@@ -78,6 +80,18 @@ public:
     Error_t home();
 
     Error_t clearFault();
+
+    bool isMoving() {
+        for(int i=0; i<NUM_ARMS; ++i) {
+            if (m_pArms[i]->isMoving()) return true;
+        }
+        return false;
+    }
+
+    void setStatusCallback(std::function<void(Status_t)> callback_fn) { m_statusCallback = std::move(callback_fn); }
+    void setPositionCallback(std::function<void(std::array<int, NUM_ARMS>)> callback_fn) {
+        m_positionCallback = std::move(callback_fn);
+    }
 
 private:
     bool m_bInitialized = false;
@@ -87,12 +101,12 @@ private:
     volatile std::atomic<bool> m_bRunning = false;
     std::array<Arm*, NUM_ARMS> m_pArms{};
     OscListener& m_oscListener;
-//    OscTransmitter m_oscTransmitter;
     CommandManager<Message_t, Port::Arm> m_cmdManager;
     StrikerController m_strikerController;
 
-    std::unique_ptr<std::thread> m_pMasterTransmitThread = nullptr;
-//    std::unique_ptr<std::thread> m_pThread = nullptr;
+    std::function<void(Status_t)> m_statusCallback = nullptr;
+    std::function<void(std::array<int, NUM_ARMS>)> m_positionCallback = nullptr;
+
     std::unique_ptr<std::thread> m_pStatusQueryThread = nullptr;
 
     std::unique_ptr<std::thread> m_pThreadPool[NUM_ARM_THREADS];
@@ -106,11 +120,11 @@ private:
 
     IAIController& m_IAIController;
 
+    std::ofstream m_debugLog;
+
     void armMidiCallback(int note, int velocity);
     void armServoCallback(const char* cmd);
     void armCallback(int armId, int position, float acceleration, float v_max);
-
-    void masterTransmitHandler();
 
     void threadPoolHandler();
     void statusQueryHandler();
@@ -127,7 +141,7 @@ private:
      */
     int checkInterference(int armId, int position, int direction, int& ret);
 
-    Error_t prepareToPlay(int note, Message_t* msg=nullptr, bool bMoveInterferingArm=true);
+    Error_t planPath(int note, Message_t* msg=nullptr, bool bMoveInterferingArm=true);
 
     Error_t moveInterferingArms(int armId, int toPos);
     Error_t moveInterferingArm_rec(int armId, int toPos, int direction, int initialArmId, std::list<int>& positions);

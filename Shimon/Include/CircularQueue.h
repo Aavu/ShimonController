@@ -23,10 +23,10 @@ public:
         m_pQueue = nullptr;
     }
 
-    bool push(T cmdPacket) {
+    bool push(T payload) {
         if (isFull()) std::cout << "Warning: Queue full. Overwriting old values.\n";
 //        std::cout << "push: " << m_iNumValues << "\t" << m_iSize << std::endl;
-        m_pQueue[m_iTail] = std::move(cmdPacket);
+        m_pQueue[m_iTail] = std::move(payload);
         m_iTail = (m_iTail + 1) % m_iSize;
         m_iNumValues = (m_iNumValues + 1) % (m_iSize + 1);
 

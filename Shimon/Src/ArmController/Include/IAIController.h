@@ -271,7 +271,7 @@ public:
         return kNoError;
     }
 
-    Error_t updateStats(int armId) {
+    Error_t updateStats(int armId, int timeout_ms = IAI_TIMEOUT) {
         if (!m_bInitialized) return kNotInitializedError;
         Error_t e;
 //        uint8_t buf[RTU_BUFFER_SIZE];
@@ -286,13 +286,16 @@ public:
         ERROR_CHECK(e, e);
 
         // Tout = To + α + (10 x Bprt/Kbr) [msec]
-        Util::sleep_ms(20 + 5 + (int)ceil(10. * (7 + 8) / (IAI_BAUDRATE/1000.0)));
-        int n = m_serialDevice.readline(asciiMsg, '\n', IAI_BUFFER_SIZE, IAI_TIMEOUT);
+
+        auto sleepTime = 20 + 5 + (int)ceil(10. * (7 + 8) / (IAI_BAUDRATE/1000.0)); // ~26ms
+
+        if (sleepTime > timeout_ms) return kTimeoutError;
+
+        Util::sleep_ms(sleepTime);
+        int n = m_serialDevice.readline(asciiMsg, '\n', IAI_BUFFER_SIZE, timeout_ms - sleepTime);
         if (n == 0) {
-            LOG_ERROR("Timeout");
             return kTimeoutError;
         } else if ( n < 0) {
-            LOG_ERROR("Read Error");
             return kReadError;
         }
 

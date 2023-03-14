@@ -17,26 +17,14 @@ void sigHandle(int sig) {
 int main() {
     signal(SIGINT, sigHandle);
     signal(SIGTERM, sigHandle);
-//    std::cout << SPDLOG_ACTIVE_LEVEL << std::endl;
-    Logger::init((Logger::Level)SPDLOG_ACTIVE_LEVEL);
+    Logger::init(Logger::trace);
     LOG_INFO("Shimon Booting up");
 
     Error_t e;
 
     pShimon = std::make_unique<Shimon>(PORT, HM_CONFIG_FILE, CMD_BUFFER_SIZE);
 
-    e = pShimon->initArms();
-    if (e != kNoError) {
-        LOG_ERROR("Arm Init failed. Error Code {}", e);
-        return e;
-    }
-
-//    e = pShimon->initHead();
-//    if (e != kNoError) {
-//        LOG_ERROR("Head Init failed. Error Code {}", e);
-//        return e;
-//    }
-
+    pShimon->init(MASTER_HOST, MASTER_PORT);
     pShimon->start();
 
     return 0;

@@ -11,6 +11,7 @@
 #include <cctype>
 #include <string>
 #include <cstdio>
+#include <array>
 
 #include "Def.h"
 
@@ -89,6 +90,13 @@ public:
         for (const int& i: strikerIds) id += (1 << i);
 
         return id;
+    }
+
+    static bool arePositionsDifferent(std::array<int, NUM_ARMS> a, std::array<int, NUM_ARMS> b) {
+        for (int i=0; i<NUM_ARMS; ++i) {
+            if (a[i] != b[i]) return true;
+        }
+        return false;
     }
 
 private:

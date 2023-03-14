@@ -8,7 +8,8 @@
 ArmController::ArmController(OscListener& oscListener, size_t cmdBufferSize) : m_oscListener(oscListener),
                                                                                 m_cmdManager(cmdBufferSize, m_cv),
                                                                                 m_strikerController(cmdBufferSize),
-                                                                                m_IAIController(IAIController::getInstance())
+                                                                                m_IAIController(IAIController::getInstance()),
+                                                                                m_debugLog("debug.log", std::ios::trunc)
 {
     for (int i = 0; i< NUM_ARMS; ++i) {
         m_pArms[i] = new Arm(i, kInitialArmPosition[i], kW[i], kB[i]);
@@ -18,12 +19,14 @@ ArmController::ArmController(OscListener& oscListener, size_t cmdBufferSize) : m
 }
 
 ArmController::~ArmController() {
+    reset();
+
     for (int i = 0; i< NUM_ARMS; ++i) {
         delete m_pArms[i];
         m_pArms[i] = nullptr;
     }
 
-    reset();
+    m_debugLog.close();
 }
 
 Error_t ArmController::init() {
@@ -47,7 +50,6 @@ Error_t ArmController::init() {
         armCallback(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2), std::forward<decltype(PH3)>(PH3), std::forward<decltype(PH4)>(PH4));
     });
 
-
     e = m_strikerController.init(STRIKER_HOST, STRIKER_PORT);
     ERROR_CHECK(e, e);
 
@@ -56,12 +58,24 @@ Error_t ArmController::init() {
     return kNoError;
 }
 
-Error_t ArmController::initMasterTransmitter(const std::string& host, int port) {
-    return kNoError; //m_oscTransmitter.init(host, port);
+Error_t ArmController::reset() {
+    auto err = m_IAIController.reset(true);
+    ERROR_CHECK(err, err);
+
+    err = resetArms();
+    ERROR_CHECK(err, err);
+
+    return m_strikerController.reset();
 }
 
-Error_t ArmController::reset() {
-    return m_strikerController.reset();
+Error_t ArmController::resetArms() {
+    Error_t e = kNoError;
+    for (int i = 0; i< NUM_ARMS; ++i) {
+        auto err = m_pArms[i]->reset();
+        if (err != kNoError) e = err;
+    }
+
+    return e;
 }
 
 void ArmController::armMidiCallback(int note, int velocity) {
@@ -72,23 +86,24 @@ void ArmController::armMidiCallback(int note, int velocity) {
     msg.midiNote = note;
 
     Error_t e;
-    e = prepareToPlay(note, &msg, false);
+    e = planPath(note, &msg, false);
 
     if (e == kNoError) {
         // Arm
-        m_cmdManager.push(Port::Arm::IAI, msg);
+        bool success = m_cmdManager.push(Port::Arm::IAI, msg);
+        if (!success) {
+            LOG_ERROR("Unable to push msg");
+        }
     }
 }
 
 Error_t ArmController::start() {
     if (!m_bInitialized) return kNotInitializedError;
     m_bRunning = true;
-//    m_pThread = std::make_unique<std::thread>([this] {threadHandler();});
     for (auto & thread : m_pThreadPool) {
         thread = std::make_unique<std::thread>([this] { threadPoolHandler(); });
     }
     m_pStatusQueryThread = std::make_unique<std::thread>([this] {statusQueryHandler();});
-//    m_pMasterTransmitThread = new std::thread([this]() { masterTransmitHandler(); })
 
     return kNoError;
 }
@@ -103,31 +118,40 @@ Error_t ArmController::stop() {
         if (thread)
             if (thread->joinable())
                 thread->join();
-    if (m_pStatusQueryThread->joinable()) m_pStatusQueryThread->join();
+    if (m_pStatusQueryThread && m_pStatusQueryThread->joinable()) m_pStatusQueryThread->join();
 
-//    if (m_pMasterTransmitThread) m_pMasterTransmitThread->join();
     return kNoError;
 }
 
-Error_t ArmController::prepareToPlay(int note, ArmController::Message_t *msg, bool bMoveInterferingArm) {
+Error_t ArmController::planPath(int note, ArmController::Message_t *msg, bool bMoveInterferingArm) {
+    auto e = kImpossibleError;
     auto timeNow = steady_clock::now();
     auto originalNote = note;
+    int target = midiToPosition(note);
+
+    if (target < 0)
+        goto return_err;
+
     for (int o = 0; o < NUM_OCTAVES_TO_TRY; ++o) {
         note = Util::transpose(originalNote, kOctavesToTry[o]*12);
-        int target = midiToPosition(note);
+        target = midiToPosition(note);
         std::list<Message_t> c_msg;
 
         for (int i=0; i<m_pArms.size(); ++i) {
             Arm* pArm = m_pArms[i];
+
             auto t = std::max(pArm->getArrivalTime(), timeNow);
-            if (pArm->getPosition() == target) {
-                LOG_INFO("Arm {} already at {}", i, target);
+            auto armTarget = pArm->getTarget();
+
+            if (armTarget == target) {
+//                LOG_INFO("Arm {} already at {} for note {}", i, target, note);
                 msg->arm_id = i;
                 msg->acceleration = 0;
                 msg->v_max = 0;
-                msg->target = pArm->getPosition();
+                msg->target = armTarget;
                 pArm->setMsgTime(timeNow);
-                return kNoError;
+                e = kNoError;
+                goto return_err;
             }
 
             float diffTime = (float)duration_cast<microseconds>(timeNow - t).count() / 1000.f;
@@ -135,16 +159,21 @@ Error_t ArmController::prepareToPlay(int note, ArmController::Message_t *msg, bo
 
 //            LOG_INFO("arm {}, time {} {}", i, diffTime, time_ms);
             float temp0, temp1;
-            Error_t e;
-            e = pArm->computeMotionParam(target, (float)time_ms, &temp0, &temp1);
-            int dir = (target > pArm->getPosition()) ? 1 : -1;
 
-            int dummy;
-            // returns 0 if there is no interference, 1 if interference is to the right and -1 if interference is to the left
-            int interference = checkInterference(i, target, dir, dummy);
-            if (interference != 0) continue;
+            e = pArm->computeMotionParam(target, (float)time_ms, &temp0, &temp1);
+            int dir = (target > armTarget) ? 1 : -1;
+
+//            LOG_INFO("arm: {} position: {} target: {} acc: {} v_max: {}, err: {}", i, armTarget, target, temp1, temp0, e);
 //            LOG_INFO("time: {}", diffTime);
             if (e == kNoError) {    // Motion possible
+                int dummy;
+                // returns 0 if there is no interference, 1 if interference is to the right and -1 if interference is to the left
+                int interference = checkInterference(i, target, dir, dummy);
+                if (interference != 0) {
+//                    LOG_DEBUG("Arm {} has interference in direction {}", i, interference);
+                    continue;
+                }
+
                 Message_t m = {
                         .arm_id = i,
                         .target = target,
@@ -180,15 +209,32 @@ Error_t ArmController::prepareToPlay(int note, ArmController::Message_t *msg, bo
             m_pArms[m.arm_id]->updateTrajectory((int) m.time_ms, m.target, m.acceleration, m.v_max);
             m_pArms[m.arm_id]->setMsgTime(timeNow);
 //            auto diff = duration_cast<milliseconds>(msg->arrivalTime - msg->msgTime).count();
+            LOG_INFO("Arm: {} \t position: {} \t target: {} \t acc: {} \t v_max: {}", m.arm_id, m_pArms[m.arm_id]->getTarget(), m.target, m.acceleration, (int)std::round(m.v_max));
 //            LOG_INFO("Arm {}, Time {} {} {}", m.arm_id, diff, duration_cast<milliseconds>(msg->msgTime.time_since_epoch()).count(), duration_cast<milliseconds>(msg->arrivalTime.time_since_epoch()).count());
-            return kNoError;
+            e = kNoError;
+            goto return_err;
         }
 //        }
         LOG_INFO("{} octave not possible.", kOctavesToTry[o]);
     }
 
-    LOG_WARN("Impossible to moveArm to the note...");
-    return kImpossibleError;
+    return_err:
+    {
+//        for (int i = 0; i < m_pArms.size(); ++i) {
+//            Arm *pArm = m_pArms[i];
+//            auto lb = pArm->getLeftBoundary();
+//            auto lbt = pArm->getLeftBoundaryFor(target);
+//            auto rb = pArm->getRightBoundary();
+//            auto rbt = pArm->getRightBoundaryFor(target);
+//            std::cout << lb << " " << rb << " ";
+//        }
+//
+//        std::cout << std::endl;
+
+        if (e == kImpossibleError)
+            LOG_WARN("Impossible to moveArm to the note...");
+        return e;
+    }
 }
 
 Error_t ArmController::moveInterferingArms(int armId, int toPos) {
@@ -239,39 +285,49 @@ int ArmController::checkInterference(int armId, int target, int direction, int& 
             return 0;
         }
 
-        // after motion complete
+//        // after motion complete
+//        int leftBoundary = m_pArms[l_idx]->getRightBoundary();  // Right boundary if the arm to the left is the left boundary of this arm!
+//        ret = target - kBoundaries[l_idx][1];
+//        if (ret < 0) ret = -10000;
+//        if (target <= leftBoundary) return -1;
+//
+//        // TODO: Need to calculate the boundary using at the time when the current arm would reach this position and not from the current time
+//        // For arm in motion
+
         int leftBoundary = m_pArms[l_idx]->getRightBoundary();
         ret = target - kBoundaries[l_idx][1];
         if (ret < 0) ret = -10000;
         if (target <= leftBoundary) return -1;
 
-        // TODO: Need to calculate the boundary using at the time when the current arm would reach this position and not from the current time
-        // For arm in motion
-
     } else {
         int r_idx = armId + 1;
 
-        if (r_idx > NUM_ARMS) {
+        if (r_idx >= NUM_ARMS) {
             ret = -10000;
             return 0;
         }
 
-        // after motion complete
+//        // after motion complete
+//        int rightBoundary = m_pArms[r_idx]->getLeftBoundary();
+//        ret = target + kBoundaries[r_idx][0];
+//        if (ret > SLIDER_LIMIT) ret = -10000;
+//        if (target >= rightBoundary) return 1;
+//
+//        // For arm in motion
+
         int rightBoundary = m_pArms[r_idx]->getLeftBoundary();
         ret = target + kBoundaries[r_idx][0];
         if (ret > SLIDER_LIMIT) ret = -10000;
         if (target >= rightBoundary) return 1;
-
-        // For arm in motion
-//        rightBoundary = m_pArms[r_idx]->getLeftBoundary();
     }
 
     return 0;
 }
 
 int ArmController::midiToPosition(int note) {
-    int position = std::min(MAX_NOTE - MIN_NOTE, std::max(0, note - MIN_NOTE));
-    position = std::min(position, SLIDER_LIMIT);
+    if (note < MIN_NOTE || note > MAX_NOTE) return -1;
+    int position = note - MIN_NOTE;
+    position = std::min(position, MAX_NOTE - MIN_NOTE);
     return kNotePositionTable[position];
 }
 
@@ -313,6 +369,9 @@ void ArmController::armServoCallback(const char *sCmd) {
     if (e != kNoError) {
         LOG_ERROR("Error Code: {}", e);
     }
+
+    m_debugLog.close();
+    m_debugLog.open("debug.log", std::ios::trunc);
 }
 
 void ArmController::strikerCallBack(char type, uint8_t strikerIds, int dummy, int position, int acc) {
@@ -329,31 +388,8 @@ void ArmController::strikerMidiCallback(char type, uint8_t strikerIds, uint8_t m
 //    });
 }
 
-void ArmController::masterTransmitHandler() {
-//    while (m_bRunning) {
-//        bool isEmpty = false;
-//        {
-//            std::lock_guard<std::mutex> lk(m_mtx);
-//            isEmpty = m_transmissionQueue.empty();
-//        }
-//        if (isEmpty) {
-//            sleep(100);
-//            continue;
-//        }
-//
-//        float fVal;
-//        {
-//            std::lock_guard<std::mutex> lk(m_mtx);
-//            fVal = m_transmissionQueue.front();
-//            m_transmissionQueue.pop();
-//        }
-//
-//
-//    }
-}
-
 void ArmController::threadPoolHandler() {
-    while (true) {
+    while (m_bRunning) {
         Message_t msg{};
         int id;
         _tp now, msgTime, arrivalTime;
@@ -371,14 +407,23 @@ void ArmController::threadPoolHandler() {
 
         if (success) {
             now = std::chrono::steady_clock::now();
-            LOG_DEBUG("Sleeping for {} ms", duration_cast<milliseconds>(msgTime - now).count());
+//            LOG_DEBUG("Sleeping for {} ms", duration_cast<milliseconds>(msgTime - now).count());
             std::this_thread::sleep_until(msgTime);
             m_newCmdCv.notify_all();
             Error_t e = m_pArms[id]->move(msg.target, msg.acceleration, msg.v_max);
-            if (e != kNoError) LOG_ERROR("Move Error Code: {}", e);
+            if (e != kNoError) {
+                if (e != kAlreadyThereError)
+                    LOG_ERROR("Move Error Code: {}", e);
+            }
+//            m_debugLog << "Note: " << msg.midiNote
+//                        << "\t ArmID: " << id
+//                        <<  "\t Position: " << msg.target
+//                        << "\t acc: " << msg.acceleration
+//                        << " \t v_max: " << (int)std::round(msg.v_max)
+//                        << std::endl;
 
-            LOG_DEBUG("Arrival Time: {} ms", duration_cast<milliseconds>(arrivalTime - now).count() - 50);
-            std::this_thread::sleep_until(arrivalTime - milliseconds(50));
+//            LOG_DEBUG("Arrival Time: {} ms", duration_cast<milliseconds>(arrivalTime - now).count() - 50);
+            std::this_thread::sleep_until(arrivalTime - milliseconds(STRIKE_TIME));
             e = m_strikerController.strike(msg.midiNote, id, msg.midiVelocity);
             if (e != kNoError) LOG_ERROR("Error Code: {}", e);
         }
@@ -388,22 +433,35 @@ void ArmController::threadPoolHandler() {
 void ArmController::statusQueryHandler() {
     const int interval_ms = 1;
     int i = 0;
+    std::array<int, NUM_ARMS> position{};
+    std::array<int, NUM_ARMS> lastPosition{-1 ,-1, -1, -1};
     while (m_bRunning) {
         std::unique_lock<std::mutex> lk(m_newCmdMtx);
         m_newCmdCv.wait(lk, [this] { return !m_bRunning || m_IAIController.isHomed();});
         if (!m_bRunning) break;
         auto now = std::chrono::steady_clock::now();
         for (auto *pArm: m_pArms) {
+            Error_t e = kNoError;
+#ifndef SIMULATE
+            e = pArm->updateStatusFromDevice();
+#else
             pArm->updatePositionFromTrajectory(interval_ms);
-//            Error_t e = pArm->updateStatusFromDevice();
-//            if (e != kNoError) {
+#endif
+            if (e != kNoError) {
+                LOG_ERROR("Error updating position for Arm: {}", pArm->getID());
+                pArm->updatePositionFromTrajectory(interval_ms);
+            }
 
-//            }
-//            if (e != kNoError) {
-//                LOG_ERROR("Error updating position for Arm: {}", pArm->getID());
-//            }
+            position[pArm->getID()] = pArm->getPosition();
+        }
+
+        if (m_positionCallback) {
+            if (Util::arePositionsDifferent(position, lastPosition)) {
+                m_positionCallback(position);
+            }
         }
         std::this_thread::sleep_until(now + std::chrono::milliseconds(interval_ms));
+        lastPosition = position;
     }
 }
 
@@ -413,7 +471,12 @@ Error_t ArmController::home() {
     e = servosOn(true);
     ERROR_CHECK(e, e);
 
-    return m_IAIController.home();
+    e = m_IAIController.home();
+    if (m_statusCallback && e == kNoError) m_statusCallback(Status_t::HomingComplete);
+    ERROR_CHECK(e, e);
+    e = resetArms();
+
+    return e;
 }
 
 Error_t ArmController::servosOn(bool bTurnOn) {

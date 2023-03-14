@@ -6,7 +6,7 @@
 import socket
 
 msg = list("/striker")
-msg.extend(['s', 8, 1, 35, 67620])
+msg.extend(['s', 0, 1, 35, 67620])
 bin_msg = []
 for m in msg:
     if (type(m) is str):
