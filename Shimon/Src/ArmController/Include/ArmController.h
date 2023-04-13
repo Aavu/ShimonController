@@ -29,6 +29,7 @@
 
 #include "Def.h"
 #include "ErrorDef.h"
+#include "StatusDef.h"
 #include "Logger.h"
 
 // Only for Debugging
@@ -37,37 +38,11 @@
 
 using namespace std::chrono;
 
-#define NUM_ARM_THREADS 32
+#define NUM_ARM_THREADS 1
 
 class ArmController {
 public:
-    typedef std::chrono::steady_clock::time_point _tp;
-    struct Message_t {
-        int arm_id;
-        int target;
-        float acceleration;
-        float v_max;
-        int midiNote;
-        int midiVelocity;
-        uint8_t strikerId;
-        int time_ms;
-//        _tp arrivalTime;
-//        _tp msgTime;
-
-        void pprint() const {
-            std::bitset<8> sId(strikerId);
-            std::cout << "Id: " << arm_id
-                    << "\t target: " << target
-                    << "\t acc: " << acceleration
-                    << "\t vmax: " << v_max
-                    << "\t midi vel: " << midiVelocity
-                    << "\t strikerId: " << sId
-                    << "\t time (ms): " << time_ms
-                    << std::endl;
-        }
-    };
-
-    ArmController(OscListener& oscListener, size_t cmdBufferSize);
+    ArmController(OscListener& oscListener, size_t cmdBufferSize, tp programStartTime = steady_clock::now());
     ~ArmController();
     Error_t init();
 
@@ -100,8 +75,11 @@ private:
     const int kB[NUM_ARMS] = {0, -40, 1350, 1385};
     volatile std::atomic<bool> m_bRunning = false;
     std::array<Arm*, NUM_ARMS> m_pArms{};
+
+    long long m_iNoteCounter = 0;
+
     OscListener& m_oscListener;
-    CommandManager<Message_t, Port::Arm> m_cmdManager;
+    CommandManager<Arm::Message_t, Port::Arm> m_cmdManager;
     StrikerController m_strikerController;
 
     std::function<void(Status_t)> m_statusCallback = nullptr;
@@ -120,7 +98,9 @@ private:
 
     IAIController& m_IAIController;
 
+    // For debugging
     std::ofstream m_debugLog;
+    tp kProgramStartTime;
 
     void armMidiCallback(int note, int velocity);
     void armServoCallback(const char* cmd);
@@ -141,10 +121,12 @@ private:
      */
     int checkInterference(int armId, int position, int direction, int& ret);
 
-    Error_t planPath(int note, Message_t* msg=nullptr, bool bMoveInterferingArm=true);
+    Error_t planPath(Arm::Message_t& msg, bool bMoveInterferingArm=false);
 
-    Error_t moveInterferingArms(int armId, int toPos);
-    Error_t moveInterferingArm_rec(int armId, int toPos, int direction, int initialArmId, std::list<int>& positions);
+    /*
+     * Get the msg payload to move the interfering arm away.
+     */
+    Error_t getInterference(const Arm::Message_t& msg, Arm::Message_t& returnMsg);
 };
 
 

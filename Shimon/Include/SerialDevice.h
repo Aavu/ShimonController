@@ -39,6 +39,13 @@ public:
         return false;
     }
 
+    [[nodiscard]] bool available() const {
+#ifndef SIMULATE
+        return m_serial.available();
+#endif
+        return false;
+    }
+
     Error_t init(int iBaudrate) {
         std::lock_guard<std::mutex> lk(m_mtx);
         LOG_TRACE("Initializing Serial port with baudrate: {}", iBaudrate);

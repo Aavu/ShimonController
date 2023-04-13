@@ -110,6 +110,9 @@ public:
         std::lock_guard<std::mutex> lk(m_mtx);
         if (!m_bInitialized) return kNotInitializedError;
         if (!m_bHomed) return kNotHomedError;
+
+        if (msg.v_max == 0 || msg.acceleration < 1e-6) return kAlreadyThereError; // Probably already there
+
         Error_t e;
 
         if (msgType == MsgType::RTU) {
@@ -150,19 +153,26 @@ public:
 
         e = parsePositioningDataResponse(response, resp);
         ERROR_CHECK(e, e);
-//
-//        success = false;
-//        if (resp.startAddr == query.startAddr) {
-//            if (resp.numRegisters == query.numRegisters) {
-//                if (resp.functionCode == query.functionCode) {
-//                    if (resp.slaveAddr == query.slaveAddr) {
-//                        success = true;
-//                    }
-//                }
-//            }
-//        }
-//
-////        if (!resp.operator==(query)) return kSetValueError;
+
+        success = false;
+        if (resp.startAddr == query.startAddr) {
+            if (resp.numRegisters == query.numRegisters) {
+                if (resp.functionCode == query.functionCode) {
+                    if (resp.slaveAddr == query.slaveAddr) {
+                        success = true;
+                    } else {
+                        LOG_ERROR("Query slaveAddr: {} Resp slaveAddr: {}", resp.slaveAddr, query.slaveAddr);
+                    }
+                } else {
+                    LOG_ERROR("Query functionCode: {} Resp functionCode: {}", resp.functionCode, query.functionCode);
+                }
+            } else {
+                LOG_ERROR("Query numRegisters: {} Resp startAddr: {}", resp.numRegisters, query.numRegisters);
+            }
+        } else {
+            LOG_ERROR("Query startAddr: {} Resp startAddr: {}", resp.startAddr, query.startAddr);
+        }
+
         if (!success) return kSetValueError;
 #else
         Util::sleep_ms(10);

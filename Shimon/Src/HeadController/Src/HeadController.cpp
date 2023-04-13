@@ -4,12 +4,15 @@
 
 #include "HeadController.h"
 
-HeadController::HeadController(OscListener &oscListener, const std::string& configFile, size_t cmdBufferSize) :
-m_oscListener(oscListener),
-m_motorController(configFile),
-m_cmdManager(cmdBufferSize, m_cv),
-m_breatheGesture(m_cmdManager),
-m_headBangGesture(m_cmdManager)
+HeadController::HeadController(OscListener &oscListener,
+                               const std::string& configFile,
+                               size_t cmdBufferSize,
+                               tp programStartTime) : m_oscListener(oscListener)
+                                                    , m_motorController(configFile)
+                                                    , m_cmdManager(cmdBufferSize, m_cv)
+                                                    , m_kProgramStartTime(programStartTime)
+                                                    , m_breatheGesture(m_cmdManager)
+                                                    , m_headBangGesture(m_cmdManager)
 {
     HeadCommandUtil::populateStrCmdMap();
 

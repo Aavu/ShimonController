@@ -11,7 +11,7 @@
 #include "Def.h"
 #include "Util.h"
 #include "CommandManager.h"
-#include "StrikerTransmitter.h"
+#include "StrikerHandler.h"
 #include "ErrorDef.h"
 #include "Logger.h"
 
@@ -22,8 +22,6 @@ using std::chrono::milliseconds, std::chrono::duration_cast, std::chrono::steady
 
 class StrikerController {
 public:
-    typedef steady_clock::time_point _tp;
-
     enum class Mode {
         None,
         Slow,
@@ -36,9 +34,11 @@ public:
 
     struct StrikerMessage_t {
         uint8_t strikerId;
+        uint8_t midiVelocity;
         float position;
         float acceleration;
         Mode mode;
+        tp strikeTime;
     };
 
     explicit StrikerController(size_t cmdBufferSize) : m_cmdManager(cmdBufferSize, m_cv) {}
@@ -53,21 +53,34 @@ public:
         ERROR_CHECK(e, e);
         setMode(Mode::Slow);
 
-        m_bRunning = true;
-
-        m_pMultiStrikerMsgThread = std::make_unique<std::thread>([this]{ msgTimeoutHandler(); });
         m_bInitialized = true;
         return kNoError;
+    }
+
+    Error_t start() {
+        if (!m_bInitialized) return kNotInitializedError;
+
+        m_bRunning = true;
+        m_pMultiStrikerMsgThread = std::make_unique<std::thread>([this]{ msgTimeoutHandler(); });
+        m_pStrikerThread = std::make_unique<std::thread>([this] {strikerHandler();});
+
+        return kNoError;
+    }
+
+    void stop() {
+        m_bRunning = false;
+        m_cv.notify_all();
+        m_bulkCv.notify_all();
+
+        if (m_pStrikerThread) if (m_pStrikerThread->joinable()) m_pStrikerThread->join();
+        if (m_pMultiStrikerMsgThread) if (m_pMultiStrikerMsgThread->joinable()) m_pMultiStrikerMsgThread->join();
     }
 
     Error_t reset() {
         if (!m_bInitialized) return kNoError;
         LOG_TRACE("Resetting Strikers");
-        m_bRunning = false;
-        m_cv.notify_all();
-        m_bulkCv.notify_all();
-
-        if (m_pMultiStrikerMsgThread->joinable()) m_pMultiStrikerMsgThread->join();
+        stop();
+        m_transmitter.reset();
         m_bInitialized = false;
 
         return kNoError;
@@ -84,14 +97,35 @@ public:
 
     void setMode(Mode mode) {
         if (mode != Mode::None) m_currentMode = mode;
-        LOG_DEBUG("Setting Strike mode to: {}", getMode(m_currentMode));
+//        LOG_DEBUG("Setting Strike mode to: {}", getMode(m_currentMode));
     }
     Mode getMode() { return m_currentMode; }
+
+    Error_t scheduleStrike(int note, int armId, int midiVelocity, tp strikeTime, Mode mode = Mode::None) {
+        if (!m_bInitialized) return kNotInitializedError;
+
+        setMode(mode);
+        uint8_t uiVelocity = std::max(0, std::min(127, midiVelocity));
+
+        uint8_t strikerId = 1 << ((armId * 2) + Util::isWhiteKey(note));
+
+        StrikerMessage_t msg = {.strikerId = strikerId,
+                                .midiVelocity = uiVelocity,
+                                .position = getPosition(uiVelocity),
+                                .acceleration = getAcceleration(uiVelocity),
+                                .mode = m_currentMode,
+                                .strikeTime = strikeTime};
+
+        bool success = m_cmdManager.push(Port::Arm::Epos, msg);
+        if (!success) return kBufferWriteError;
+        return kNoError;
+    }
 
     Error_t strike(int note, int armId, int midiVelocity, Mode mode = Mode::None) {
         if (!m_bInitialized) return kNotInitializedError;
 //        auto now = steady_clock::now();
 
+        midiVelocity = std::max(0, std::min(127, midiVelocity));
         int strikerId = (armId * 2) + Util::isWhiteKey(note);
         return strike((1 << strikerId), midiVelocity, mode);
 //        {
@@ -105,13 +139,15 @@ public:
     }
 
     Error_t strike(uint8_t strikerId, int midiVelocity, Mode mode = Mode::None) {
-        return strike(strikerId, getPosition(midiVelocity), getAcceleration(midiVelocity), mode);
+        if (mode != Mode::None) setMode(mode);
+        return m_transmitter.send(strikerId, midiVelocity, getMode(m_currentMode));
+//        return strike(strikerId, getPosition(midiVelocity), getAcceleration(midiVelocity), mode);
     }
 
-    Error_t strike(uint8_t strikerId, float position, float acceleration, Mode mode = Mode::None) {
-        if (mode != Mode::None) setMode(mode);
-        return m_transmitter.send(strikerId, position, acceleration, getMode(m_currentMode));
-    }
+//    Error_t strike(uint8_t strikerId, float position, float acceleration, Mode mode = Mode::None) {
+//
+//        return m_transmitter.send(strikerId, position, acceleration, getMode(m_currentMode));
+//    }
 
     static char getMode(Mode mode) {
         switch (mode) {
@@ -147,7 +183,7 @@ public:
     }
 
 private:
-    StrikerTransmitter m_transmitter;
+    StrikerHandler m_transmitter;
     Mode m_currentMode = Mode::Slow;
     bool m_bInitialized = false;
 
@@ -156,11 +192,12 @@ private:
     std::condition_variable m_cv, m_bulkCv;
     volatile std::atomic<bool> m_bRunning = false;
 
+    std::unique_ptr<std::thread> m_pStrikerThread = nullptr;
     std::unique_ptr<std::thread> m_pMultiStrikerMsgThread;
 
     CommandManager<StrikerMessage_t, Port::Arm> m_cmdManager;
     std::list<int> m_bulkMsgStrikerIds;
-    _tp m_lastTime = std::chrono::steady_clock::now();
+    tp m_lastTime = std::chrono::steady_clock::now();
 
     float getPosition(int midiVelocity) {
         midiVelocity = std::max(0, std::min(midiVelocity, 127));
@@ -177,7 +214,7 @@ private:
     }
 
     void msgTimeoutHandler() {
-        while (true) {
+        while (m_bRunning) {
             std::unique_lock<std::mutex> lk(m_bulkMtx);
             m_bulkCv.wait(lk, [this] { return !m_bRunning || !m_bulkMsgStrikerIds.empty(); });
             if (!m_bRunning) break;
@@ -190,11 +227,31 @@ private:
                 if (e != kNoError) {
                     LOG_ERROR("Error Code: {}", e);
                 }
-//                else {
-//                    LOG_INFO("DiffTime: {} \t Bulk Striker Id: {}", diffTime, (int) strikerId);
-//                }
                 m_bulkMsgStrikerIds.clear();
             }
+        }
+    }
+
+    void strikerHandler() {
+        bool success = false;
+        LOG_DEBUG("Striker handler started...");
+        while (m_bRunning) {
+            StrikerMessage_t msg{};
+            {
+                std::unique_lock<std::mutex> lk(m_mtx);
+                m_cv.wait(lk, [this] { return !m_bRunning || !m_cmdManager.isEmpty(); });
+                if (!m_bRunning) break;
+                success = m_cmdManager.pop(Port::Arm::Epos, msg);
+            }
+
+            if (success) {
+                std::this_thread::sleep_until(msg.strikeTime - std::chrono::milliseconds(STRIKE_TIME));
+                Error_t e = strike(msg.strikerId, msg.midiVelocity, msg.mode);
+                if (e != kNoError) LOG_ERROR("Error striking. Error Code: {}", e);
+            } else {
+                LOG_ERROR("Cannot get Striker msg. Error Code: {}", kBufferReadError);
+            }
+
         }
     }
 };

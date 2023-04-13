@@ -33,7 +33,7 @@
 
 class HeadController {
 public:
-    HeadController(OscListener& oscListener, const std::string& configFile, size_t cmdBufferSize);
+    HeadController(OscListener& oscListener, const std::string& configFile, size_t cmdBufferSize, tp programStartTime);
     ~HeadController();
     Error_t init(bool shouldHome = true);
     Error_t reset();
@@ -48,6 +48,7 @@ private:
     std::unique_ptr<std::thread> m_pThread = nullptr;
     std::mutex m_mtx;
     std::condition_variable m_cv;
+    const tp m_kProgramStartTime;
 
     OscListener& m_oscListener;
     MotorController m_motorController;

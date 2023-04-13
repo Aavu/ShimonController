@@ -4,11 +4,12 @@
 
 #include "Shimon.h"
 
-Shimon::Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize) :
+Shimon::Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize, tp programStartTime) :
                                                     m_oscListener(port)
                                                     , m_positionTransmitQueue(POSITION_BUFFER_SIZE)
-                                                    , m_armController(m_oscListener, cmdBufferSize)
-                                                    , m_headController(m_oscListener, hmConfigFile, cmdBufferSize)
+                                                    , m_kProgramStartTime(programStartTime)
+                                                    , m_armController(m_oscListener, cmdBufferSize, programStartTime)
+                                                    , m_headController(m_oscListener, hmConfigFile, cmdBufferSize, programStartTime)
 {
     m_oscListener.setSystemMsgCallback([this](auto &&PH) {
         sysMsgCallback(std::forward<decltype(PH)>(PH));
@@ -74,7 +75,6 @@ void Shimon::masterTransmitHandler() {
 }
 
 void Shimon::sysMsgCallback(const char *msg) {
-    std::cout << msg << std::endl;
     if (strcmp(msg, "quit") == 0 || strcmp(msg, "close") == 0 || strcmp(msg, "exit") == 0) {
         stop();
     } else if (strcmp(msg, "setHost") == 0 || strcmp(msg, "SetHost") == 0 || strcmp(msg, "sethost") == 0) {

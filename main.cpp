@@ -18,7 +18,7 @@ int main() {
     signal(SIGINT, sigHandle);
     signal(SIGTERM, sigHandle);
     Logger::init(Logger::trace);
-    LOG_INFO("Shimon Booting up");
+    LOG_INFO("Shimon Controller (Build 0.0.1a)");
 
     Error_t e;
 

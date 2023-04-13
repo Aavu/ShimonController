@@ -34,7 +34,7 @@ public:
         m_stream.Clear();
     }
 
-    void send(const char* addrPattern, std::array<int, NUM_ARMS> positions) {
+    void send(const char* addrPattern, const std::array<int, NUM_ARMS>& positions) {
         if (!m_pSocket) return;
         m_stream << osc::BeginMessage(addrPattern);
         for (int i=0; i<NUM_ARMS; ++i) {

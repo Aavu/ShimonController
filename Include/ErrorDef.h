@@ -40,10 +40,14 @@ enum Error_t {
 
     kImpossibleError,
     kAlreadyThereError,
+    kInterferenceError,
 
     kTimeoutError,
 
     kNamingError,
+
+    kBufferReadError,
+    kBufferWriteError,
 
     kUnknownCaseError,
     kUnknownError

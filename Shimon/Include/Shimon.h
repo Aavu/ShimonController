@@ -6,6 +6,7 @@
 #define SHIMONCONTROLLER_SHIMON_H
 
 #include <iostream>
+#include <chrono>
 #include "ArmController.h"
 #include "HeadController.h"
 #include "OscListener.h"
@@ -19,7 +20,7 @@
 
 class Shimon {
 public:
-    Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize);
+    Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize, tp programStartTime = std::chrono::steady_clock::now());
     Error_t init(const std::string& masterHostName, int masterPort);
     void start();
     void stop();
@@ -28,6 +29,7 @@ private:
     bool m_bArmInitialized = false;
     bool m_bHeadInitialized = false;
     std::atomic<bool> m_bRunning = false;
+    const tp m_kProgramStartTime;
     OscTransmitter m_oscTransmitter;
     OscListener m_oscListener;
     HeadController m_headController;
