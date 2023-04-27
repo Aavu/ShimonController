@@ -17,9 +17,9 @@
 template<class T, class P>
 class CommandManager {
 public:
-    explicit CommandManager(size_t bufferSize, std::condition_variable& cv) : m_cv(cv) {
+    explicit CommandManager(std::condition_variable& cv) : m_cv(cv) {
         for (int i=0; i<(int)Port::kNumPorts; ++i)
-            m_portQueueMap[(P)i] = new CircularQueue<T>(bufferSize);
+            m_portQueueMap[(P)i] = new CircularQueue<T>(CMD_BUFFER_SIZE);
     }
 
     ~CommandManager() {
@@ -41,6 +41,10 @@ public:
         return true;
     }
 
+    bool peek(P port, T& pkt) {
+        return m_portQueueMap[port]->peek(pkt);
+    }
+
     [[nodiscard]] bool isEmpty(P port = (P)Port::kNumPorts) {
         if (port == (P)Port::kNumPorts) {
             for (auto& element : m_portQueueMap)
@@ -53,6 +57,10 @@ public:
 
     int getNumCommandsInQueue(P port) {
         return m_portQueueMap[port]->numPacketsInQueue();
+    }
+
+    bool reset(P port) {
+        return m_portQueueMap[port]->reset();
     }
 
 private:

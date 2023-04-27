@@ -33,7 +33,7 @@
 
 class HeadController {
 public:
-    HeadController(OscListener& oscListener, const std::string& configFile, size_t cmdBufferSize, tp programStartTime);
+    HeadController(OscListener& oscListener, const std::string& configFile, tp programStartTime);
     ~HeadController();
     Error_t init(bool shouldHome = true);
     Error_t reset();

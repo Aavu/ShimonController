@@ -6,10 +6,9 @@
 
 HeadController::HeadController(OscListener &oscListener,
                                const std::string& configFile,
-                               size_t cmdBufferSize,
                                tp programStartTime) : m_oscListener(oscListener)
                                                     , m_motorController(configFile)
-                                                    , m_cmdManager(cmdBufferSize, m_cv)
+                                                    , m_cmdManager(m_cv)
                                                     , m_kProgramStartTime(programStartTime)
                                                     , m_breatheGesture(m_cmdManager)
                                                     , m_headBangGesture(m_cmdManager)
@@ -124,7 +123,7 @@ void HeadController::threadHandler() {
             m_motorController.send(cmdPkt);
         }
 
-        std::this_thread::sleep_until(loopTime + std::chrono::milliseconds (THREAD_TIME_PERIOD));
+        std::this_thread::sleep_until(loopTime + std::chrono::milliseconds (HEAD_THREAD_TIME_PERIOD));
     }
 }
 

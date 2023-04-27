@@ -42,7 +42,7 @@ using namespace std::chrono;
 
 class ArmController {
 public:
-    ArmController(OscListener& oscListener, size_t cmdBufferSize, tp programStartTime = steady_clock::now());
+    ArmController(OscListener& oscListener, tp programStartTime = steady_clock::now());
     ~ArmController();
     Error_t init();
 
@@ -55,13 +55,6 @@ public:
     Error_t home();
 
     Error_t clearFault();
-
-    bool isMoving() {
-        for(int i=0; i<NUM_ARMS; ++i) {
-            if (m_pArms[i]->isMoving()) return true;
-        }
-        return false;
-    }
 
     void setStatusCallback(std::function<void(Status_t)> callback_fn) { m_statusCallback = std::move(callback_fn); }
     void setPositionCallback(std::function<void(std::array<int, NUM_ARMS>)> callback_fn) {
@@ -87,12 +80,9 @@ private:
 
     std::unique_ptr<std::thread> m_pStatusQueryThread = nullptr;
 
-    std::unique_ptr<std::thread> m_pThreadPool[NUM_ARM_THREADS];
-
     std::mutex m_mtx, m_oscMtx;
     std::condition_variable m_cv;
 
-    volatile std::atomic<bool> m_bUpdatePosition = true;
     std::mutex m_newCmdMtx;
     std::condition_variable m_newCmdCv;
 
@@ -101,16 +91,14 @@ private:
     // For debugging
     std::ofstream m_debugLog;
     tp kProgramStartTime;
+    //
 
-    void armMidiCallback(int note, int velocity);
+    void strikerChoreoCallback(uint8_t idCode, int target, int time_ms);
+    void armMidiCallback(bool bNoteON, int note, int velocity);
     void armServoCallback(const char* cmd);
     void armCallback(int armId, int position, float acceleration, float v_max);
 
-    void threadPoolHandler();
     void statusQueryHandler();
-
-    void strikerMidiCallback(char type, uint8_t strikerIds, uint8_t midiVelocity);
-    void strikerCallBack(char type, uint8_t strikerIds, int dummy, int position, int acc);
 
     static int midiToPosition(int note);
 
@@ -121,12 +109,7 @@ private:
      */
     int checkInterference(int armId, int position, int direction, int& ret);
 
-    Error_t planPath(Arm::Message_t& msg, bool bMoveInterferingArm=false);
-
-    /*
-     * Get the msg payload to move the interfering arm away.
-     */
-    Error_t getInterference(const Arm::Message_t& msg, Arm::Message_t& returnMsg);
+    Error_t planPath(Arm::Message_t& msg);
 };
 
 

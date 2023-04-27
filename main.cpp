@@ -18,11 +18,14 @@ int main() {
     signal(SIGINT, sigHandle);
     signal(SIGTERM, sigHandle);
     Logger::init(Logger::trace);
-    LOG_INFO("Shimon Controller (Build 0.0.1a)");
+    LOG_INFO("Shimon Controller (Build 0.0.2)");
+#ifdef SIMULATE
+    LOG_INFO("*******SIMULATION MODE*******");
+#endif
 
     Error_t e;
 
-    pShimon = std::make_unique<Shimon>(PORT, HM_CONFIG_FILE, CMD_BUFFER_SIZE);
+    pShimon = std::make_unique<Shimon>(PORT, HM_CONFIG_FILE);
 
     pShimon->init(MASTER_HOST, MASTER_PORT);
     pShimon->start();

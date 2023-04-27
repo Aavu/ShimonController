@@ -87,8 +87,11 @@ namespace Port {
     const int kNumPorts = 2;
 }
 
-#define CMD_BUFFER_SIZE 16
+#define CMD_BUFFER_SIZE 1024    // Make sure this number is huge!
 #define POSITION_BUFFER_SIZE 1000
-#define THREAD_TIME_PERIOD 15 /* ms */
+#define HEAD_THREAD_TIME_PERIOD 15 /* ms */
 
+
+#define ARM_MIDI_CHANNEL 1
+#define HEAD_MIDI_CHANNEL 2
 #endif //SHIMONCONTROLLER_DEF_H

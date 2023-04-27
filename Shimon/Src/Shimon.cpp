@@ -4,12 +4,12 @@
 
 #include "Shimon.h"
 
-Shimon::Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize, tp programStartTime) :
+Shimon::Shimon(int port, const std::string& hmConfigFile, tp programStartTime) :
                                                     m_oscListener(port)
                                                     , m_positionTransmitQueue(POSITION_BUFFER_SIZE)
                                                     , m_kProgramStartTime(programStartTime)
-                                                    , m_armController(m_oscListener, cmdBufferSize, programStartTime)
-                                                    , m_headController(m_oscListener, hmConfigFile, cmdBufferSize, programStartTime)
+                                                    , m_armController(m_oscListener, programStartTime)
+                                                    , m_headController(m_oscListener, hmConfigFile, programStartTime)
 {
     m_oscListener.setSystemMsgCallback([this](auto &&PH) {
         sysMsgCallback(std::forward<decltype(PH)>(PH));

@@ -23,7 +23,7 @@ public:
     void setSystemMsgCallback(std::function<void(const char*)> callback_fn) {
         m_sysMsgCallback = std::move(callback_fn);
     }
-    void setArmMidiCallback(std::function<void(int, int)> callback_fn) {
+    void setArmMidiCallback(std::function<void(bool, int, int)> callback_fn) {
         m_armMidiCallback = std::move(callback_fn);
     }
 
@@ -43,7 +43,11 @@ public:
         m_strikerCallback = std::move(callback_fn);
     }
 
-    void setStrikerMidiCallback(std::function<void(char, uint8_t, uint8_t)> callback_fn) {
+    void setStrikerChoreoCallback(std::function<void(uint8_t, int, int)> callback_fn) {
+        m_strikerChoreoCallback = std::move(callback_fn);
+    }
+
+    void setStrikerMidiCallback(std::function<void(char, uint8_t, uint8_t, uint8_t)> callback_fn) {
         m_strikerMidiCallback = std::move(callback_fn);
     }
 
@@ -92,7 +96,7 @@ private:
     unsigned long m_ulHostAddr = 0;
     int m_iPort = 0;
     std::atomic<bool> m_bRunning = false;
-    std::function<void(int, int)> m_armMidiCallback = nullptr;
+    std::function<void(bool, int, int)> m_armMidiCallback = nullptr;
     std::function<void(int, int, float, float)> m_armCallback = nullptr;
     std::function<void(const char*)> m_armServoCallback = nullptr;
     std::function<void(const char*)> m_sysMsgCallback = nullptr;
@@ -100,7 +104,8 @@ private:
     /* TODO: Replace with variadic functions */
     std::function<void(const char*, std::optional<float>, std::optional<float>)> m_headCallback = nullptr;
 
-    std::function<void(char, uint8_t, uint8_t)> m_strikerMidiCallback = nullptr;
+    std::function<void(char, uint8_t, uint8_t, uint8_t)> m_strikerMidiCallback = nullptr;
+    std::function<void(uint8_t, int, int)> m_strikerChoreoCallback = nullptr;
     std::function<void(char, uint8_t, int, int, int)> m_strikerCallback = nullptr;
 
     void processArmMessage(osc::ReceivedMessageArgumentStream& args, uint32_t count) {
@@ -109,9 +114,10 @@ private:
             args >> cmd >> osc::EndMessage;
             if (m_armServoCallback) m_armServoCallback(cmd);
         } else if (count == 2) {   // Midi format
-            osc::int32 note, velocity;
+            osc::int32 note, velocity, channel;
             args >> note >> velocity >> osc::EndMessage;
-            if (m_armMidiCallback) m_armMidiCallback((int)note, (int)velocity);
+            if (m_armMidiCallback)  //channel == ARM_MIDI_CHANNEL &&
+                m_armMidiCallback(velocity != 0, (int)note, (int)velocity);
         } else {    // Raw format
             osc::int32 armId, position, v_max, hit_vel, time;
             float acc;
@@ -120,7 +126,7 @@ private:
             } else if (count == 6) {    // Backward compatibility
                 args >> armId >> position >> acc >> v_max >> hit_vel >> time >> osc::EndMessage;
             } else {
-                LOG_WARN("Unknown command format");
+                LOG_WARN("Unknown command format. cmd count: {}", count);
                 return;
             }
             if (m_armCallback) m_armCallback((int)armId-1, (int)position, acc, (float)v_max);
@@ -130,11 +136,17 @@ private:
     void processStrikerMessage(osc::ReceivedMessageArgumentStream& args, uint32_t count) {
         osc::int32 strikerIds;
         char type;
-        if (count == 3) {   // Midi format
-            osc::int32 midiVelocity;
-            args >> type >> strikerIds >> midiVelocity >> osc::EndMessage;
+
+        if (count == 3) {   // Choreo format
+            osc::int32 position, time_ms;
+            args >> strikerIds >> position >> time_ms >> osc::EndMessage;
             if (strikerIds < 0 || strikerIds > 0xFF) return;
-            if (m_strikerMidiCallback) m_strikerMidiCallback(type, strikerIds, midiVelocity);
+            if (m_strikerChoreoCallback) m_strikerChoreoCallback(strikerIds, position, time_ms);
+        } if (count == 4) {   // Midi format
+            osc::int32 midiVelocity, channel;
+            args >> type >> strikerIds >> midiVelocity >> channel >> osc::EndMessage;
+            if (strikerIds < 0 || strikerIds > 0xFF) return;
+            if (m_strikerMidiCallback) m_strikerMidiCallback(type, strikerIds, midiVelocity, channel);
         } else if (count == 5) {   // Raw format
             osc::int32 dummy, position, acceleration;
             args >> type >> strikerIds >> dummy >> position >> acceleration >> osc::EndMessage;

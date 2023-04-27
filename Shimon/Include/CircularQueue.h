@@ -25,7 +25,6 @@ public:
 
     bool push(T payload) {
         if (isFull()) std::cout << "Warning: Queue full. Overwriting old values.\n";
-//        std::cout << "push: " << m_iNumValues << "\t" << m_iSize << std::endl;
         m_pQueue[m_iTail] = std::move(payload);
         m_iTail = (m_iTail + 1) % m_iSize;
         m_iNumValues = (m_iNumValues + 1) % (m_iSize + 1);
@@ -35,10 +34,15 @@ public:
 
     bool pop(T& ret) {
         if (isEmpty()) return false;
-//        std::cout << "pop: " << m_iNumValues << "\t" << m_iSize << std::endl;
         ret = std::move(m_pQueue[m_iHead]);
         m_iHead = (m_iHead + 1) % m_iSize;
         m_iNumValues--;
+        return true;
+    }
+
+    bool peek(T& ret) {
+        if (isEmpty()) return false;
+        ret = std::copy(m_pQueue[m_iHead]);
         return true;
     }
 

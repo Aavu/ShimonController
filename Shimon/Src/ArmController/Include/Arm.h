@@ -6,6 +6,7 @@
 #define SHIMONCONTROLLER_ARM_H
 
 #include <iostream>
+#include "CommandManager.h"
 #include "IAIController.h"
 #include "SliderModel.h"
 #include "Def.h"
@@ -22,19 +23,16 @@ public:
         float v_max{};
         int midiNote{};
         int midiVelocity{};
-        uint8_t strikerId{};
         int time_ms{};
         _tp arrivalTime;
         _tp msgTime;
 
         void pprint() const {
-            std::bitset<8> sId(strikerId);
             std::cout << "Id: " << arm_id
                       << "\t target: " << target
                       << "\t acc: " << acceleration
                       << "\t vmax: " << v_max
                       << "\t midi vel: " << midiVelocity
-                      << "\t strikerId: " << sId
                       << "\t time (ms): " << time_ms
                       << std::endl;
         }
@@ -45,108 +43,111 @@ public:
         int right=0;
     };
 
-    Arm(int id, int iHomePosition, int w, int b) : m_id(id),
-                                                kHomePosition(iHomePosition),
-                                                m_controller(IAIController::getInstance()),
-                                                m_iW(w), m_iB(b)
+    Arm(int id,
+        int iHomePosition,
+        int w, int b) : m_id(id),
+                        kHomePosition(iHomePosition),
+                        m_controller(IAIController::getInstance()),
+                        m_iW(w), m_iB(b),
+                        m_cmdManager(m_cmdCv)
     {
         reset();
     }
 
     Error_t reset() {
         Error_t e;
-
-        Message_t msg{};
-        msg.arm_id = m_id;
-        msg.target = kHomePosition;
-        msg.msgTime = steady_clock::now();
-        msg.arrivalTime = steady_clock::now() + milliseconds(DLY);
-        e = setMessage(msg);
-        if (e != kNoError) {
-            LOG_ERROR("Error Code: {}", e);
-            return e;
-        }
-
+        m_bMoving = false;
         e = _setPosition(kHomePosition);
         if (e != kNoError) {
             LOG_ERROR("Error Code: {}", e);
             return e;
         }
 
-        m_lastMsg = {m_id, kHomePosition, 0, 0, 0, 0, 0, 0, steady_clock::now(), steady_clock::now()};
+        Message_t msg{};
+        msg.arm_id = m_id;
+        msg.target = kHomePosition;
+        msg.msgTime = steady_clock::now()- milliseconds(DLY);   // Basically infinite time before now
+        msg.arrivalTime = steady_clock::now() + milliseconds(DLY);
+        msg.time_ms = DLY;
+        e = setMessage(msg);
+        if (e != kNoError) {
+            LOG_ERROR("Error Code: {}", e);
+            return e;
+        }
 
-        LOG_DEBUG("Id: {} \t position: {} \t lb: {} \t rb: {}", m_id, m_iPosition, m_boundary.left, m_boundary.right);
+        m_mostRecentMsg = {m_id,
+                           kHomePosition,
+                           0, 0, MIN_NOTE, 0, DLY,
+                           steady_clock::now(),
+                           steady_clock::now()- milliseconds(DLY)};
+//        LOG_DEBUG("Id: {} \t position: {} \t lb: {} \t rb: {}", m_id, m_iPosition, m_boundary.left, m_boundary.right);
         return kNoError;
     }
 
-//    Error_t setTarget(int position) {
-//        m_iTarget = position;
-//        _updateTargetBoundaries();
-//        return kNoError;
-//    }
+    Error_t start() {
+        m_bRunning = true;
+        m_pThreadPool = std::make_unique<std::thread>([this] { threadPoolHandler(); });
+        kProgramStartTime = steady_clock::now();
+        return kNoError;
+    }
+
+    void stop() {
+        m_bRunning = false;
+        m_bMoving = false;
+        m_cmdCv.notify_all();
+
+        if (m_pThreadPool)
+            if (m_pThreadPool->joinable()) m_pThreadPool->join();
+    }
+
+    Error_t addMessageToQueue(const Message_t& msg) {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        bool success = m_cmdManager.push(Port::Arm::IAI, msg);
+        if (!success) {
+            LOG_ERROR("Unable to push msg");
+            return kSetValueError;
+        }
+        m_mostRecentMsg = msg;
+        return kNoError;
+    }
 
     Error_t setMessage(const Message_t& msg) {
-        setLastMsg(m_msg);
+        std::lock_guard<std::mutex> lk(m_mtx);
+        m_lastMsg = m_msg;
         m_msg = msg;
         _updateTargetBoundaries();
         _updateTrajectory();
         return kNoError;
     }
 
-    void setLastMsg(const Message_t& msg) {
-        m_lastMsg = msg;
-    }
-
     [[nodiscard]] int getPosition() const { return m_iPosition; }
-    [[nodiscard]] int getTarget() const { return m_msg.target; }
-    [[nodiscard]] int getLastTarget() const { return m_lastMsg.target; }
-    /*
-     * This function should be called periodically from the Arm Controller
-     */
-    Error_t updateStatusFromDevice() {
-        Error_t e;
-        int pos = m_msg.target;
-#ifndef SIMULATE
-        int timeout_ms = 100;
-        e = m_controller.updateStats(m_id, timeout_ms);
-        if (e == kNotInitializedError || e == kTimeoutError) return _setPosition(pos); // Ignore timeout
-        else { ERROR_CHECK(e, e); }
-        pos = m_controller.getPosition(m_id);
-        pos = (int) round(((pos * 0.01) - m_iB) / m_iW);
-
-        if (std::abs(pos - m_msg.target) > FOLLOW_ERROR_THRESHOLD) {
-            LOG_WARN("Follow Error. Arm: {} \t target: {} \t pos: {}", m_id, m_msg.target, pos);
-        }
-#endif
-        return _setPosition(pos);
-    }
-
-    [[nodiscard]] bool isMoving() const {
-        return m_bIsMoving;
-    }
-
-    void setMoving(bool bMoving) {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        m_bIsMoving = bMoving;
-        m_iTrajIdx = 0;
-        m_cv.notify_all();
-    }
 
     void updatePosition(int iPos) {
-        if (!m_bIsMoving) return;
-//        LOG_INFO("Arm {} traj pos: {}", m_id, iPos);
         _setPosition(iPos);
     }
 
-    void updatePositionFromTrajectory(int interval_ms=1, int endTime_ms=DLY) {
-        updatePosition(m_aiTraj[m_iTrajIdx]);
-//        updatePosition(m_iTarget);
-        m_iTrajIdx = std::min(endTime_ms, m_iTrajIdx + interval_ms);
-        if (m_iTrajIdx == endTime_ms - 1 && m_bIsMoving) {
-//            if (m_id == 1) LOG_INFO("End Time: {}", endTime);
-            setMoving(false);
-            _setPosition(m_msg.target);
+    bool updatePositionFromTrajectory(int interval_ms=1) {
+        static int lastPos[NUM_ARMS] = {-1, -1, -1, -1};
+        std::lock_guard<std::mutex> lk(m_mtx);
+
+        m_iTrajIdx = std::max(m_iTrajIdx + interval_ms, 0);
+        if (m_iTrajIdx > m_iEndTimeIdx) {
+            m_iTrajIdx = m_iEndTimeIdx;
+            m_bMoving = false;
         }
+
+        if (!m_bMoving)
+            return false;
+
+        int pos = m_aiTraj[m_iTrajIdx];
+
+        if (pos != lastPos[m_id]) {
+            updatePosition(pos);
+            lastPos[m_id] = m_iPosition;
+            return true;
+        }
+
+        return false;
     }
 
     [[nodiscard]] int getID() const { return m_id; }
@@ -160,42 +161,34 @@ public:
     }
 
     [[nodiscard]] int getInstantaneousLeftBoundary() const {
-        int pos = m_bIsMoving ? m_aiTraj[std::min(m_iTrajIdx, DLY - 1)] : m_iPosition;
-        return pos - kBoundaries[m_id][0];
+        return m_iPosition - kBoundaries[m_id][0];
     }
 
     [[nodiscard]] int getInstantaneousRightBoundary() const {
-        int pos = m_bIsMoving ? m_aiTraj[std::min(m_iTrajIdx, DLY - 1)] : m_iPosition;
-        return pos + kBoundaries[m_id][1];
+        return m_iPosition + kBoundaries[m_id][1];
     }
 
-    [[nodiscard]] int getLeftBoundaryFor(int iTarget) const { return iTarget - kBoundaries[m_id][0]; }
-    [[nodiscard]] int getRightBoundaryFor(int iTarget) const { return iTarget + kBoundaries[m_id][1]; }
+    [[nodiscard]] int getPositionInSliderCoordinate(int pos) const { return pos * m_iW + m_iB; }
 
-    [[nodiscard]] int getTargetInSliderCoordinate(int pos) const { return pos * m_iW + m_iB; }
+    // These are the info if all cmds in the queue is executed. This is not the last info at this point in time!
+    [[nodiscard]] const _tp& getMostRecentMsgTime() const { return m_mostRecentMsg.msgTime; }
+    [[nodiscard]] const _tp& getMostRecentArrivalTime() const { return m_mostRecentMsg.arrivalTime; }
+    [[nodiscard]] int getMostRecentTarget() const { return m_mostRecentMsg.target; }
 
-    void setMsgTime(_tp time) {
-        m_msg.msgTime = std::max(m_lastMsg.arrivalTime, time);
-        m_msg.arrivalTime = time + milliseconds (DLY);
-    }
-
-    [[nodiscard]] const _tp& getMsgTime() const { return m_msg.msgTime; }
-    [[nodiscard]] const _tp& getArrivalTime() const { return m_msg.arrivalTime; }
-
-    [[nodiscard]] const _tp& getLastArrivalTime() const { return m_lastMsg.arrivalTime; }
-
-    [[nodiscard]] int getTime_ms() const { return m_msg.time_ms; }
     /*
- * Computes the v max and acceleration for the arm. Returns kNoError if the motion is possible.
- */
+     * Computes the v max and acceleration for the arm. Returns kNoError if the motion is possible.
+     */
     Error_t computeMotionParam(Message_t& msg) const {
-        // When computing, the target is not set. So m_msg is the last msg
-        auto dPos = std::abs(msg.target - m_msg.target);
+        // Displacement is the difference between the target and the most recent target
+        auto dPos = std::abs(msg.target - getMostRecentTarget());
         if (dPos == 0) {
             msg.acceleration = 0;
             msg.v_max = 0;
             return kNoError;    // No need to send kAlreadyThereError as IAI controller will take care of it.
         }
+
+        if (msg.time_ms < 1)
+            return kArgLimitError;
 
         auto fPos = (float)dPos / 1000.f;
 
@@ -210,41 +203,13 @@ public:
         return kNoError;
     }
 
-    void move(Message_t& msg, float fallbackAcc ,float fallbackVel) {
-        Error_t e;
-
-        e = computeMotionParam(msg);
-        if (e != kNoError) {
-            LOG_ERROR("Cannot use delay of {}. Error code: {}. Fallback to {}", msg.time_ms, (int)e, DLY);
-            msg.v_max = fallbackVel;
-            msg.acceleration = fallbackAcc;
-        }
-        e = setTargetAndMove(msg);
-        if (e != kNoError) {
-            LOG_ERROR("Error moving arm {} with vel {} and acc {}", m_id, msg.acceleration, msg.v_max);
-        }
-    }
-
-    Error_t move(int position, float time_ms) {
-        Error_t e;
-
-        Message_t msg{.target = position, .time_ms = static_cast<int>(time_ms)};
-        e = computeMotionParam(msg);
-        if (e != kNoError) {
-            LOG_DEBUG("Cannot use delay of {} as it uses velocity = {} and Acc = {}. Error code: {}", time_ms, msg.v_max, msg.acceleration, (int)e);
-            return e;
-        }
-        setTargetAndMove(msg);
-        return kNoError;
-    }
-
-    Error_t setTargetAndMove(const Message_t& msg) {
+    Error_t move(const Message_t& msg) {
         setMessage(msg);
         return move();
     }
 
     Error_t move() {
-        int scPosition = getTargetInSliderCoordinate(m_msg.target);
+        int scPosition = getPositionInSliderCoordinate(m_msg.target);
         Modbus::Message_t mbMsg {
                 .armID = m_id,
                 .position = scPosition,
@@ -257,7 +222,6 @@ public:
         {
             Error_t e = m_controller.setPosition(mbMsg);
             if (e != kNoError && e != kAlreadyThereError) {
-                setMessage(m_lastMsg);
                 LOG_ERROR("Set Position Error: {}", e);
                 return e;
             }
@@ -265,8 +229,19 @@ public:
 
 //        LOG_DEBUG("Arm: {} \t target: {} \t acc: {} \t v_max: {}", m_id, getTarget(), m_msg.acceleration, (int)std::round(m_msg.v_max));
 //        LOG_DEBUG("Arm: {} \t lm: {} \t rm: {}", m_id, getLeftBoundary(), getRightBoundary());
-        setMoving(true);
 
+        LOG_INFO("Note: {} \t Arm: {} \t time: {} \t pos: {} \t target: {} \t acc: {} \t v_max: {} \t msgTime: {} \t arrTime: {}",
+                 m_msg.midiNote,
+                 m_msg.arm_id,
+                 m_msg.time_ms,
+                 m_lastMsg.target,
+                 m_msg.target,
+                 m_msg.acceleration,
+                 (int)std::round(m_msg.v_max),
+                 duration_cast<milliseconds>(m_msg.msgTime - kProgramStartTime).count(),
+                 duration_cast<milliseconds>(m_msg.arrivalTime - kProgramStartTime).count());
+        m_iTrajIdx = 0;
+        m_bMoving = true;
         return kNoError;
     }
 
@@ -281,11 +256,17 @@ public:
         return kNoError;
     }
 
+    Error_t resetBuffer() {
+        if (m_cmdManager.reset(Port::Arm::IAI)) return kNoError;
+        return kBufferWriteError;
+    }
+
 private:
     int m_id = -1;
     int m_iPosition = -1;
     const int kHomePosition;
-    std::atomic<bool> m_bIsMoving = false;
+    std::atomic<bool> m_bRunning = false;
+    std::atomic<bool> m_bMoving = false;
     IAIController& m_controller;
     Boundary m_boundary{};
     Boundary m_tBoundary{};
@@ -294,40 +275,66 @@ private:
     // Bias for slider geometry conversion
     const int m_iB = 0;
 
-    Message_t m_msg;
-    Message_t m_lastMsg;
+    tp kProgramStartTime = steady_clock::now();
+
+    Message_t m_msg, m_lastMsg;
+    Message_t m_mostRecentMsg;
+
+    CommandManager<Message_t, Port::Arm> m_cmdManager;
+
+    std::unique_ptr<std::thread> m_pThreadPool = nullptr;
 
     std::mutex m_mtx;
-    std::condition_variable m_cv;
+    std::condition_variable m_cmdCv;
 
-    int m_aiTraj[DLY];
-    int m_iTrajIdx = 0;
+    int m_aiTraj[DLY]{};
+    int m_iEndTimeIdx = DLY-1;
+    volatile std::atomic<int> m_iTrajIdx = 0;
     bool m_bServoOn = false;
 
     Error_t _updateBoundaries() {
-        m_boundary.left = getInstantaneousLeftBoundary();
-        m_boundary.right = getInstantaneousRightBoundary();
-//        LOG_DEBUG("Arm {} Boundary : {}, {}", m_id, m_boundary.left, m_boundary.right);
+        m_boundary.left = m_iPosition - kBoundaries[m_id][0];
+        m_boundary.right = m_iPosition + kBoundaries[m_id][1];
         return kNoError;
     }
 
     Error_t _updateTargetBoundaries() {
-        auto temp0 = m_msg.target - kBoundaries[m_id][0];
-        auto temp1 = m_msg.target + kBoundaries[m_id][1];
-        m_tBoundary.left = temp0;
-        m_tBoundary.right = temp1;
-//        LOG_DEBUG("Arm {} Target Boundary updated : {}, {}", m_id, m_tBoundary.left, m_tBoundary.right);
+        m_tBoundary.left = m_msg.target - kBoundaries[m_id][0];
+        m_tBoundary.right = m_msg.target + kBoundaries[m_id][1];
         return kNoError;
     }
 
     void _updateTrajectory() {
         SliderModel::compute(m_msg.time_ms, m_lastMsg.target, m_msg.target, m_msg.acceleration, m_msg.v_max, m_aiTraj);
+        m_iEndTimeIdx = m_msg.time_ms - 1;
     }
 
     Error_t _setPosition(int position) {
         m_iPosition = position;
-//        LOG_DEBUG("Arm {} Position: {}", m_id, m_iPosition);
         return _updateBoundaries();
+    }
+
+    void threadPoolHandler() {
+        while (m_bRunning) {
+            Message_t msg{};
+            tp now, msgTime;
+            bool success;
+            {
+                std::unique_lock<std::mutex> lk(m_mtx);
+                m_cmdCv.wait(lk, [this] { return !m_cmdManager.isEmpty() || !m_bRunning; });
+                if (!m_bRunning) break;
+                success = m_cmdManager.pop(Port::Arm::IAI, msg);
+            }
+
+            if (success) {
+                std::this_thread::sleep_until(msg.msgTime);
+                Error_t e = move(msg);
+                if (e != kNoError) {
+                    if (e != kAlreadyThereError)
+                        LOG_ERROR("Move Error Code: {}", e);
+                }
+            }
+        }
     }
 };
 

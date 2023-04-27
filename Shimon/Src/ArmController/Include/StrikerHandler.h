@@ -16,7 +16,7 @@
 #include "Def.h"
 #include "ErrorDef.h"
 
-#define STRIKER_BUFFER_SIZE 4
+#define STRIKER_BUFFER_SIZE 16
 #define STRIKER_SEND_RATE 10 // ms
 #define STRIKER_UDP_ROUTE_INTERNAL "/striker"
 
@@ -87,22 +87,43 @@ public:
 //        return kNoError;
 //    }
 
+/*
+    m_txMsg.data[2] = (uint8_t) (position & 0xFF);
+    m_txMsg.data[3] = (uint8_t) ((position >> 8) & 0xFF);
+    m_txMsg.data[4] = (uint8_t) ((position >> 16) & 0xFF);
+    m_txMsg.data[5] = (uint8_t) ((position >> 24) & 0xFF);
+ */
+//    Error_t send(uint8_t strikerId, int32_t position, int32_t time_ms) {
+//        std::lock_guard<std::mutex> lk(m_mtx);
+//        uint8_t buf[STRIKER_BUFFER_SIZE];
+//        buf[0] = 'c';
+//        buf[1] = strikerId;
+//        buf[2] = (uint8_t) (position & 0xFF);
+//        buf[3] = (uint8_t) ((position >> 8) & 0xFF);
+//        buf[4] = (uint8_t) ((position >> 16) & 0xFF);
+//        buf[5] = (uint8_t) ((position >> 24) & 0xFF);
+//        buf[6] = (uint8_t) (time_ms & 0xFF);
+//        buf[7] = (uint8_t) ((time_ms >> 8) & 0xFF);
+//        buf[8] = (uint8_t) ((time_ms >> 16) & 0xFF);
+//        buf[9] = (uint8_t) ((time_ms >> 24) & 0xFF);
+//        buf[10] = '\n';
+//        Error_t e = m_serial.write(buf, STRIKER_BUFFER_SIZE);
+//        ERROR_CHECK(e, e);
+//
+//        return kNoError;
+//    }
+
     Error_t send(uint8_t strikerId, uint8_t midiVelocity, const char mode) {
         std::lock_guard<std::mutex> lk(m_mtx);
-        _tp now = std::chrono::steady_clock::now();
-
-        auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastTime).count();
 
         uint8_t buf[STRIKER_BUFFER_SIZE];
         buf[0] = mode;
         buf[1] = strikerId;
         buf[2] = midiVelocity;
         buf[3] = '\n';
-//        LOG_INFO("Striker msg: {} {} {}", buf[0], buf[1], buf[2]);
         Error_t e = m_serial.write(buf, STRIKER_BUFFER_SIZE);
         ERROR_CHECK(e, e);
 
-        m_lastTime = now;
         return kNoError;
     }
 
@@ -114,12 +135,15 @@ private:
 
     void recvHandler() {
         m_bRunning = true;
+        m_serial.flush();
         while (m_bRunning) {
             char msg[64];
-            int n = m_serial.readline(msg, '\n', 64, 10);
+            int n = m_serial.readline(msg, '\n', 128, 10);
+#ifndef SIMULATE
             if (n > 0) {
                 handleLog(msg);
             }
+#endif
             if (!m_bRunning) return;
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
@@ -135,7 +159,7 @@ private:
         } else if (msg.substr(0, 4) == "WARN") {
             LOG_WARN("{}", msg.substr(6));
         } else {
-            LOG_WARN("Unknown striker message... - {}", msg);
+            LOG_WARN("Unknown striker message - {}", msg);
         }
     }
 

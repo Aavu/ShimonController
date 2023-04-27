@@ -20,8 +20,6 @@
 #define IAI_TIMEOUT 1000 // ms
 #define IAI_NTRY 3
 
-#define ALL_ARMS -1
-
 class IAIController: Modbus {
 public:
     // Singleton Class
@@ -202,7 +200,6 @@ public:
 
     Error_t home() {
         if (!m_bInitialized) return kNotInitializedError;
-        LOG_INFO("Homing IAI Actuators");
         size_t length;
 
         Error_t e;
@@ -247,7 +244,7 @@ public:
 #endif
 
         m_bHomed = true;
-        LOG_INFO("IAI Actuators Homing Complete!");
+        LOG_INFO("Homing Complete!");
         return kNoError;
     }
 

@@ -20,7 +20,7 @@
 
 class Shimon {
 public:
-    Shimon(int port, const std::string& hmConfigFile, size_t cmdBufferSize, tp programStartTime = std::chrono::steady_clock::now());
+    Shimon(int port, const std::string& hmConfigFile, tp programStartTime = std::chrono::steady_clock::now());
     Error_t init(const std::string& masterHostName, int masterPort);
     void start();
     void stop();
