@@ -98,6 +98,7 @@ private:
     void armServoCallback(const char* cmd);
     void armCallback(int armId, int position, float acceleration, float v_max);
 
+    Error_t updateArmPositionsToMaster(int interval_ms = -1);
     void statusQueryHandler();
 
     static int midiToPosition(int note);

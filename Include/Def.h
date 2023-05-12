@@ -6,7 +6,7 @@
 #define SHIMONCONTROLLER_DEF_H
 
 #include "TypeDef.h"
-//#define SIMULATE
+#define SIMULATE
 
 #define USE_ARMS
 //#define USE_HEAD
@@ -22,9 +22,6 @@
 
 #define IAI_ACTUATOR "/dev/IAIactuator"
 #define IAI_BAUDRATE 230400
-
-//#define STRIKER_HOST "192.168.1.50" // "169.254.60.1"
-//#define STRIKER_PORT 1001
 
 #define STRIKER_PORT "/dev/striker"
 #define STRIKER_BAUDRATE 115200
@@ -87,7 +84,7 @@ namespace Port {
     const int kNumPorts = 2;
 }
 
-#define CMD_BUFFER_SIZE 1024    // Make sure this number is huge!
+#define CMD_BUFFER_SIZE 1024 //65536    // Make sure this number is huge!
 #define POSITION_BUFFER_SIZE 1000
 #define HEAD_THREAD_TIME_PERIOD 15 /* ms */
 

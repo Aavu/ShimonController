@@ -36,9 +36,6 @@ public:
         RPDOTimer.setPeriod(PDO_RATE * 1000);
         RPDOTimer.attachInterrupt(RPDOTimerIRQHandler);
 
-        // faultClearTimer.setPeriod(CLEAR_FAULT_TIMER_INTERVAL * 1000);
-        // faultClearTimer.attachInterrupt(clearFaultTimerIRQHandler);
-
         return initStrikers(spec);
     }
 
@@ -65,7 +62,6 @@ public:
     void reset(bool bTerminateCAN = true) {
         m_bPlaying = false;
         RPDOTimer.stop();
-        // faultClearTimer.stop();
         auto err = resetStrikers();
         if (err != kNoError) {
             LOG_ERROR("Cannot reset strikers");
@@ -74,10 +70,8 @@ public:
             CanBus.end();
     }
 
-
-
-    Striker::Command getStrikerMode(char mode) {
-        switch (mode) {
+    static Striker::Command getStrikerCmd(char cmd) {
+        switch (cmd) {
         case 's':
             return Striker::Command::Normal;
         case 't':
@@ -89,13 +83,9 @@ public:
         case 'c':
             return Striker::Command::Choreo;
         default:
-            LOG_ERROR("unknown command : %i", mode);
+            LOG_ERROR("unknown command : %i", cmd);
             return Striker::Command::Normal;
         }
-    }
-
-    uint8_t prepare(uint8_t idCode, char mode, uint8_t midiVelocity, uint8_t channelPressure) {
-        return prepare(idCode, getStrikerMode(mode), midiVelocity, channelPressure);
     }
 
     Error_t restart() {
@@ -112,34 +102,29 @@ public:
         return kNoError;
     }
 
-    uint8_t prepare(uint8_t idCode, Striker::Command mode, uint8_t midiVelocity, uint8_t channelPressure) {
+    uint8_t prepare(uint8_t idCode, Striker::Command cmd, uint16_t param1, uint16_t param2) {
         uint8_t uiStrike = 0;
 
-        switch (mode) {
-        case Striker::Command::Restart:
+        if (cmd == Striker::Command::Restart) {
             restart();
-            break;
+            return 0;
+        }
 
-        case Striker::Command::Quit:
-            for (int i = 1; i < NUM_STRIKERS + 1; ++i) {
-                m_striker[i].shutdown();
-            }
-            break;
+        // If commnd is tremolo with param1 0, this means stop tremolo. Change the command accordingly
+        if (cmd == Striker::Command::Tremolo && param1 == 0) cmd = Striker::Command::StopTremolo;
 
-        default:
-            for (int i = 1; i < NUM_STRIKERS + 1; ++i) {
-                if (idCode & (1 << (i - 1))) {
-                    bool bStrike = m_striker[i].prepare(mode, midiVelocity, channelPressure);
-                    uiStrike += bStrike << (i - 1);
-                }
+        for (int i = 1; i < NUM_STRIKERS + 1; ++i) {
+            if (idCode & (1 << (i - 1))) {
+                bool bStrike = m_striker[i].prepare(cmd, param1, param2);
+                uiStrike += bStrike << (i - 1);
             }
         }
 
         return uiStrike;
     }
 
-    void executeCommand(uint8_t idCode, char mode, uint8_t midiVelocity, uint8_t channelPressure) {
-        uint8_t uiStrike = prepare(idCode, mode, midiVelocity, channelPressure);
+    void executeCommand(uint8_t idCode, Striker::Command cmd, uint16_t param1, uint16_t param2) {
+        uint8_t uiStrike = prepare(idCode, cmd, param1, param2);
         strike(uiStrike);
     }
 
@@ -158,7 +143,6 @@ public:
 
         m_bPlaying = true;
         RPDOTimer.start();
-        // faultClearTimer.start();
     }
 
     void stop() {
@@ -177,7 +161,6 @@ public:
 
         m_bPlaying = false;
         RPDOTimer.stop();
-        // faultClearTimer.stop();
     }
 
     Error_t enablePDO(bool bEnable = true) {
@@ -221,10 +204,9 @@ private:
     volatile bool m_bPlaying = false;
     MotorSpec m_motorSpec = MotorSpec::EC60;
 
-    HardwareTimer RPDOTimer;//, faultClearTimer;
+    HardwareTimer RPDOTimer;
 
     StrikerController(): RPDOTimer(TIMER_CH1) {}
-    // , faultClearTimer(TIMER_CH3) {}
 
     ~StrikerController() {
         reset();
@@ -253,12 +235,6 @@ private:
             pInstance->m_striker[i].update();
         }
     }
-
-    // static void clearFaultTimerIRQHandler() {
-    //     for (int i = 1; i < NUM_STRIKERS + 1; ++i) {
-    //         pInstance->m_striker[i].checkAndRecover();
-    //     }
-    // }
 };
 
 StrikerController* StrikerController::pInstance = nullptr;

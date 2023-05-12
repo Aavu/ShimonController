@@ -116,15 +116,32 @@ public:
     Error_t send(uint8_t strikerId, uint8_t midiVelocity, const char mode) {
         std::lock_guard<std::mutex> lk(m_mtx);
 
+        LOG_DEBUG("id: {}, midiVelocity: {}, mode: {}", strikerId, midiVelocity, mode);
         uint8_t buf[STRIKER_BUFFER_SIZE];
         buf[0] = mode;
         buf[1] = strikerId;
-        buf[2] = midiVelocity;
-        buf[3] = '\n';
-        Error_t e = m_serial.write(buf, STRIKER_BUFFER_SIZE);
-        ERROR_CHECK(e, e);
+        buf[2] = 0;
+        buf[3] = midiVelocity;
+        buf[4] = 0;
+        buf[5] = 0;
+        buf[6] = '\n';
+        return m_serial.write(buf, STRIKER_BUFFER_SIZE);
+    }
 
-        return kNoError;
+    Error_t send(uint8_t strikerId, uint16_t param1, uint16_t param2, const char mode) {
+        std::lock_guard<std::mutex> lk(m_mtx);
+
+        LOG_DEBUG("id: {}, param1: {}, param2: {}, mode: {}", strikerId, param1, param2, mode);
+        uint8_t buf[STRIKER_BUFFER_SIZE];
+        buf[0] = mode;
+        buf[1] = strikerId;
+        buf[2] = (param1 >> 8) & 0xFF;
+        buf[3] = param1 & 0xFF;
+        buf[4] = (param2 >> 8) & 0xFF;
+        buf[5] = param2 & 0xFF;
+        buf[6] = '\n';
+
+        return m_serial.write(buf, STRIKER_BUFFER_SIZE);
     }
 
 private:

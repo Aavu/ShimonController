@@ -11,7 +11,6 @@ String inputString = "";        // To hold incoming serial message
 bool stringComplete = false;    // Setting this flag will start processing of received message
 
 void setup() {
-    // put your setup code here, to run once:
     LOG_LOG("Initializing Shimon's Strikers...");
     inputString.reserve(10);
     pController = StrikerController::createInstance();
@@ -24,23 +23,22 @@ void setup() {
     LOG_LOG("Successfully Initialized! Controller Starting...");
     pController->start();
     delay(75);
-    LOG_LOG("Listening for commands...");   // "in format (ascii characters) <mode><id code><midi velocity>"
+    LOG_LOG("Listening for commands...");   // "in format (ascii characters) <mode><id code><midi velocity><Channel Pressure>"
 }
 
 void loop() {
     if (stringComplete) {
-        // LOG_LOG("%s", inputString);
         uint8_t idCode;
-        uint8_t midiVelocity;
-        uint8_t chPressure;
-        char cMode;
-        Error_t err = parseCommand(inputString, cMode, idCode, midiVelocity, chPressure);
+        uint16_t param1;
+        uint16_t param2;
+        Striker::Command cmd;
+        Error_t err = parseCommand(inputString, cmd, idCode, param1, param2);
         inputString = "";
         stringComplete = false;
 
         if (err == kNoError) {
-            LOG_LOG("mode %c, idCode: %i, velocity: %i, pressure: %i", cMode, idCode, midiVelocity, chPressure);
-            pController->executeCommand(idCode, cMode, midiVelocity, chPressure);
+            LOG_LOG("cmd %c, idCode: %i, param1: %i, param2: %i", cmd, idCode, param1, param2);
+            pController->executeCommand(idCode, cmd, param1, param2);
         }
     }
 }
@@ -55,17 +53,15 @@ void serialEvent() {
     }
 }
 
-// Format example to strike using motor 1 with velocity 80: s<SCH>P ... explanation s -> normal strike, <SCH> -> ascii of 0b00000001, P -> ascii of 80
-// Pressure is another parameter to map when using choreo
 // To stop tremolo, send mode t with velocity 0
-Error_t parseCommand(const String& cmd, char& mode, uint8_t& idCode, uint8_t& midiVelocity, uint8_t& channelPressure) {
-    if (cmd.length() < 4) return kCorruptedDataError;
+Error_t parseCommand(const String& rawData, Striker::Command& cmd, uint8_t& idCode, uint16_t& param1, uint16_t& param2) {
+    if (rawData.length() < 5) return kCorruptedDataError;
 
-    mode = cmd[0];
-    idCode = cmd[1];
-    midiVelocity = cmd[2];
-    if (cmd.length() == 5) {
-        channelPressure = cmd[3];
+    cmd = StrikerController::getStrikerCmd(rawData[0]);
+    idCode = rawData[1];
+    param1 = (uint8_t(rawData[2]) << 8) + (uint8_t) rawData[3];
+    if (rawData.length() == 7) {
+        param2 = (uint8_t(rawData[4]) << 8) + (uint8_t) rawData[5];;
     }
 
     return kNoError;

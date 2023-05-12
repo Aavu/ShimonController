@@ -22,8 +22,7 @@ class StrikerController {
 public:
     enum class Mode {
         None,
-        Slow,
-        Fast,
+        Strike,
         Choreo,
         Tremolo,
         TremoloStop,
@@ -31,12 +30,12 @@ public:
     };
 
     struct StrikerMessage_t {
-        uint8_t strikerId;
-        uint8_t midiVelocity;
-        int position;
-        int time_ms;
-        Mode mode;
-        tp strikeTime;
+        uint8_t strikerId = 0;
+        uint8_t midiVelocity = 0;
+        int position = 0;
+        int time_ms = 0;
+        Mode mode = Mode::None;
+        tp strikeTime{};
     };
 
     explicit StrikerController(tp programStartTime) : m_cmdManager(m_cv),
@@ -50,7 +49,7 @@ public:
         LOG_TRACE("Initializing Striker Controller with Host: {} \t port: {}", host, iPort);
         Error_t e = m_transmitter.init(host, iPort);
         ERROR_CHECK(e, e);
-        setMode(Mode::Slow);
+        setMode(Mode::Strike);
 
         m_bInitialized = true;
         return kNoError;
@@ -87,7 +86,7 @@ public:
         Error_t e = strike(0, 0, Mode::Restart);
         ERROR_CHECK(e, e);
 
-        setMode(Mode::Slow);
+        setMode(Mode::Strike);
 
         resetBuffer();
         return kNoError;
@@ -96,7 +95,6 @@ public:
     void setMode(Mode mode) {
         if (mode != Mode::None) m_currentMode = mode;
     }
-    Mode getMode() { return m_currentMode; }
 
     Error_t scheduleStrike(uint8_t idCode, int target, int time_ms) {
         if (!m_bInitialized) return kNotInitializedError;
@@ -149,14 +147,13 @@ public:
     }
 
     Error_t choreo(uint8_t strikerId, int position, int time_ms) {
-
-        return kNoError;
+        auto m = getMode(Mode::Choreo);
+        return m_transmitter.send(strikerId, position, time_ms, m);
     }
 
     static char getMode(Mode mode) {
         switch (mode) {
-            case Mode::Slow:
-            case Mode::Fast:
+            case Mode::Strike:
                 return 's';
             case Mode::Tremolo:
                 return 't';
@@ -174,7 +171,7 @@ public:
     static Mode getMode(char mode) {
         switch (mode) {
             case 's':
-                return Mode::Slow;
+                return Mode::Strike;
             case 't':
                 return Mode::Tremolo;
             case 'c':
@@ -193,7 +190,7 @@ public:
 
 private:
     StrikerHandler m_transmitter;
-    Mode m_currentMode = Mode::Slow;
+    Mode m_currentMode = Mode::Strike;
     bool m_bInitialized = false;
 
     std::mutex m_mtx;
@@ -209,20 +206,20 @@ private:
 
     float getPosition(int midiVelocity) {
         midiVelocity = std::max(0, std::min(midiVelocity, 127));
-        if (m_currentMode == Mode::Slow) return (float)midiVelocity * 0.317f + 9.683f;
-        else if (m_currentMode == Mode::Fast) return (float)midiVelocity * 0.095f + 7.905f;
+        if (m_currentMode == Mode::Strike) return (float)midiVelocity * 0.317f + 9.683f;
+//        else if (m_currentMode == Mode::Fast) return (float)midiVelocity * 0.095f + 7.905f;
         return 0;
     }
 
     float getAcceleration(int midiVelocity) {
         midiVelocity = std::max(0, std::min(midiVelocity, 127));
-        if (m_currentMode == Mode::Slow) return (float)midiVelocity * 476.19f + 29524.81f;
-        else if (m_currentMode == Mode::Fast) return (float)midiVelocity * 158.73f + 99841.27f;
+        if (m_currentMode == Mode::Strike) return (float)midiVelocity * 476.19f + 29524.81f;
+//        else if (m_currentMode == Mode::Fast) return (float)midiVelocity * 158.73f + 99841.27f;
         return 0;
     }
 
     void strikerHandler() {
-        bool success = false;
+        bool success;
         while (m_bRunning) {
             StrikerMessage_t msg{};
             {
@@ -233,8 +230,13 @@ private:
             }
 
             if (success) {
-                std::this_thread::sleep_until(msg.strikeTime - std::chrono::milliseconds(STRIKE_TIME));
-                Error_t e = strike(msg.strikerId, msg.midiVelocity, msg.mode);
+                Error_t e;
+                if (msg.mode == Mode::Choreo) {
+                    e = choreo(msg.strikerId, msg.position, msg.time_ms);
+                } else {
+                    std::this_thread::sleep_until(msg.strikeTime - std::chrono::milliseconds(STRIKE_TIME));
+                    e = strike(msg.strikerId, msg.midiVelocity, msg.mode);
+                }
                 if (e != kNoError) LOG_ERROR("Error striking. Error Code: {}", e);
             } else {
                 LOG_ERROR("Cannot get Striker msg. Error Code: {}", kBufferReadError);

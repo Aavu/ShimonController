@@ -133,7 +133,6 @@ void Shimon::headStatusCallback(Status_t status) {
 }
 
 void Shimon::armPositionCallback(std::array<int, 4> position) {
-//    m_oscTransmitter.send("/arm", position);
     m_positionTransmitQueue.push(position);
     m_cv.notify_all();
 }

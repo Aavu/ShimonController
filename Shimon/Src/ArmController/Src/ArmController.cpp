@@ -117,7 +117,7 @@ void ArmController::armMidiCallback(bool bNoteON, int note, int velocity) {
     }
 
 //    msg.pprint();
-    e = m_strikerController.scheduleStrike(msg.midiNote, msg.arm_id, msg.midiVelocity, msg.arrivalTime);
+    e = m_strikerController.scheduleStrike(msg.midiNote, msg.arm_id, msg.midiVelocity, msg.arrivalTime, StrikerController::Mode::Strike);
     if (e != kNoError) LOG_ERROR("Error Scheduling Strike: {}", e);
 }
 
@@ -304,20 +304,16 @@ void ArmController::armServoCallback(const char *sCmd) {
     Error_t e;
     switch (cmd) {
         case ArmCommand::Home:
-            LOG_INFO("Homing...");
             e = home();
             m_iNoteCounter = 0;
             break;
         case ArmCommand::Off:
-            LOG_INFO("Servos off...");
             e = servosOn(false);
             break;
         case ArmCommand::On:
-            LOG_INFO("Servos on...");
             e = servosOn(true);
             break;
         case ArmCommand::AlarmClear:
-            LOG_INFO("Alarm Clear...");
             e = clearFault();
             break;
         case ArmCommand::Reset:
@@ -346,27 +342,33 @@ void ArmController::armServoCallback(const char *sCmd) {
 
 void ArmController::statusQueryHandler() {
     const int interval_ms = 1;
-    std::array<int, NUM_ARMS> position{};
     tp timeNow = steady_clock::now();
     while (m_bRunning) {
-        bool bDidChange = false;
-        for (auto *pArm: m_pArms) {
-            if(pArm->updatePositionFromTrajectory(interval_ms)) {
-                position[pArm->getID()] = pArm->getPosition();
-                bDidChange = true;
-            }
-        }
-
-        if (m_positionCallback) {
-            if (bDidChange) {
-                m_positionCallback(position);
-//                LOG_INFO("Positions: {}, {}, {}, {}", position[0], position[1], position[2], position[3]);
-            }
-        }
-
+        updateArmPositionsToMaster(interval_ms);
         timeNow += std::chrono::milliseconds(interval_ms);
         std::this_thread::sleep_until(timeNow);
     }
+}
+
+Error_t ArmController::updateArmPositionsToMaster(int interval_ms) {
+    std::array<int, NUM_ARMS> position{};
+    bool bDidChange = false;
+    for (auto *pArm: m_pArms) {
+        if (interval_ms > 0)
+            pArm->updatePositionFromTrajectory(interval_ms);
+        int temp = pArm->getPosition();
+        bDidChange = bDidChange || (position[pArm->getID()] != temp);
+        position[pArm->getID()] = temp;
+    }
+
+    if (m_positionCallback) {
+        if (bDidChange) {
+            m_positionCallback(position);
+//                LOG_INFO("Positions: {}, {}, {}, {}", position[0], position[1], position[2], position[3]);
+        }
+    }
+
+    return kNoError;
 }
 
 Error_t ArmController::home() {
@@ -375,11 +377,12 @@ Error_t ArmController::home() {
     e = servosOn(true);
     ERROR_CHECK(e, e);
 
+    LOG_INFO("Homing...");
     e = m_IAIController.home();
     if (m_statusCallback && e == kNoError) m_statusCallback(Status_t::HomingComplete);
     ERROR_CHECK(e, e);
     e = resetArms();
-
+    updateArmPositionsToMaster();
     return e;
 }
 
@@ -389,11 +392,13 @@ Error_t ArmController::servosOn(bool bTurnOn) {
     e = clearFault();
     ERROR_CHECK(e, e);
 
+    LOG_INFO(bTurnOn ? "Servos on..." : "Servos off...");
     // Set id to -1 to set all axes at once
     e = m_IAIController.setServo(-1, bTurnOn);
     return e;
 }
 
 Error_t ArmController::clearFault() {
+    LOG_INFO("Alarm Clear...");
     return m_IAIController.clearFault();
 }

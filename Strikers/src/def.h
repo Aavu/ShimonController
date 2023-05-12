@@ -18,4 +18,7 @@ const int kStrikerDirection[9] = { 0, 0, 1, 0, 0, 1, 1, 1, 0 }; // 0 is normal, 
 #define CLEAR_FAULT_TIMER_INTERVAL 100   // ms
 
 #define MAX_STRIKER_ANGLE_DEG 180
+
+#define MAX_PARAM_1 255
+#define MAX_PARAM_2 255
 #endif // SHIMON_DEF_H

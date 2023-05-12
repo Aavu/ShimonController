@@ -34,7 +34,7 @@ public:
         }
 
         m_iCurrentIdx = kTotalPoints;
-        m_mode = Command::Restart;
+        m_cmd = Command::Restart;
         Error_t e = home();
         if (e != kNoError) return e;
 
@@ -55,34 +55,36 @@ public:
     }
 
     Error_t prepToGoHome() {
-        m_mode = Command::Restart;
-        Error_t err = generateTraj(0);
+        m_cmd = Command::Restart;
+        Error_t err = generateTraj(0, 0);
         m_iCurrentIdx = 0;
         return err;
     }
 
     // Prepare and return true if should striker, false if shouldn't strike
-    bool prepare(Command mode, uint8_t midiVelocity, uint8_t channelPressure) {
+    bool prepare(Command cmd, uint16_t param1, uint16_t param2) {
         if (!m_bInitialized) return false;
 
-        // If current mode is tremolo
-        // If incoming mode is tremolo, dont do anything
-        // if incoming mode is different, first stop tremolo
-        if (m_mode == Striker::Command::Tremolo) {
-            // If mode is already Tremolo, don't generate new traj
-            if (mode == m_mode) return false;
-            else stopTremolo();
-        }
+        m_cmd = cmd;
+        switch (m_cmd) {
+        case Command::Quit:
+            shutdown();
+            return false;
 
-        m_mode = mode;
+        case Command::Restart:
+            LOG_WARN("The code should never hit this line. Something is wrong!!!");
+            return false;
 
-        if (m_mode == Command::StopTremolo || (m_mode == Command::Tremolo && midiVelocity == 0)) {
+        case Command::StopTremolo:
             stopTremolo();
             return false;
+
+        default:
+            break;
         }
 
         if (m_iCurrentIdx <= m_iEndIdx) {
-            LOG_WARN("Command arrived early. CurrentIdx: %i, endIdx: %i", m_iCurrentIdx, m_iEndIdx);
+            LOG_WARN("Cmd arrived early. idx: %i, endIdx: %i", m_iCurrentIdx, m_iEndIdx);
             // If a new command arrives, quick stop current motion and start new trajectory
             int e = epos.PDO_quickStop();
             if (e != 0) {
@@ -90,9 +92,9 @@ public:
             }
         }
 
-        Error_t err = generateTraj(midiVelocity, channelPressure);
+        Error_t err = generateTraj(param1, param2);
         if (err != 0) {
-            LOG_ERROR("Error preparing striker %i with mode %i and velocity %i", epos.getNodeId(), mode, midiVelocity);
+            LOG_ERROR("Error preparing striker %i with cmd %i and velocity %i", epos.getNodeId(), cmd, param1);
             return false;
         }
 
@@ -117,7 +119,7 @@ public:
         //     LOG_LOG("%i", epos.getCurrentPosition_ticks());
         // }
 
-        if (m_mode == Command::Tremolo) {
+        if (m_cmd == Command::Tremolo) {
             if (m_iCurrentIdx > m_iEndIdx) { // Keep looping after trajectory ends until stop tremolo is called
                 m_iCurrentIdx = m_iTremoloStartIdx;
             }
@@ -189,15 +191,15 @@ public:
         reset();
     }
 
-    void startTremolo(uint8_t midiVelocity) {
-        m_mode = Command::Tremolo;
+    void startTremolo(uint16_t param) {
+        m_cmd = Command::Tremolo;
         m_iCurrentIdx = MAX_TRAJ_POINTS;
-        generateTraj(midiVelocity);
+        generateTraj(param, 0);
         strike();
     }
 
     void stopTremolo() {
-        m_mode = Command::Normal;
+        m_cmd = Command::Normal;
         stopStrike();
         m_iTremoloStartIdx = 0;
         m_iEndIdx = MAX_TRAJ_POINTS;
@@ -237,7 +239,7 @@ public:
 private:
     Epos4 epos;
     bool m_bInitialized = false;
-    Command m_mode = Command::Restart;
+    Command m_cmd = Command::Restart;
     static const int kNumPointsForHit = NUM_POINTS_IN_TRAJ_FOR_HIT * PDO_RATE;
     static const int kNumPointsForUp = NUM_POINTS_IN_TRAJ_FOR_UP * PDO_RATE;
     static const int kTotalPoints = kNumPointsForHit + kNumPointsForUp;   // 65ms total with 1ms cycle time -> 65/1
@@ -249,10 +251,10 @@ private:
     int m_iTremoloStartIdx = 0;
     int m_iTremoloEndIdx = 0;
 
-    Error_t generateTraj(uint8_t midiVelocity, uint8_t channelPressure = 0) {
+    Error_t generateTraj(uint16_t param1, uint16_t param2) {
         float q0, qf;
 
-        switch (m_mode) {
+        switch (m_cmd) {
         case Command::Restart:
         case Command::StopTremolo:
             q0 = epos.getCurrentPosition_deg();;
@@ -262,13 +264,13 @@ private:
             return kNoError;
 
         case Command::Quit:
-            LOG_ERROR("Cannot generate trajectory for mode: {}", (int) m_mode);
+            LOG_ERROR("Cannot generate trajectory for cmd: {}", (int) m_cmd);
             return kTrajectoryError;
 
         case Command::Choreo:
             q0 = epos.getCurrentPosition_deg();
-            qf = choreoPositionMap(channelPressure);
-            m_iEndIdx = choreoTimeMap(midiVelocity) - 1;
+            qf = choreoPositionMap(param2);
+            m_iEndIdx = choreoTimeMap(param1) - 1;
             // char msg[64];
             // sprintf(msg, "q0: %i, qf: %i, endIdx: %i", (int) (q0 * 100), (int) (qf * 100), m_iEndIdx);
             // Serial.println(msg);
@@ -283,8 +285,8 @@ private:
         float fInitialPosition_deg, fStrikePosition_deg, fBlend;
         int iNumPtsForHit, iNumPtsForUp;
 
-        velocityMap(midiVelocity, fInitialPosition_deg, fStrikePosition_deg, fBlend);
-        timeMap(midiVelocity, iNumPtsForHit, iNumPtsForUp);
+        positionMap(param1, fInitialPosition_deg, fStrikePosition_deg, fBlend);
+        timeMap(param1, iNumPtsForHit, iNumPtsForUp);
 
         // go to initial position
         q0 = epos.getCurrentPosition_deg();
@@ -298,38 +300,41 @@ private:
 
         // upward movement
         q0 = fStrikePosition_deg;
-        qf = (m_mode == Command::Tremolo) ? fInitialPosition_deg : HOME_POSITION;
-        float blend = (m_mode == Command::Tremolo) ? fBlend : 0.25;
+        qf = (m_cmd == Command::Tremolo) ? fInitialPosition_deg : HOME_POSITION;
+        float blend = (m_cmd == Command::Tremolo) ? fBlend : 0.25;
         Util::interpWithBlend(q0, qf, iNumPtsForUp, blend, &m_afTraj[iNumPtsForHit]);
         m_iEndIdx = kTotalPoints - 1;
 
         return kNoError;
     }
 
-    float choreoPositionMap(uint8_t pressure) {
-        pressure = min(MAX_STRIKER_ANGLE_DEG, pressure);
-        return (float) pressure;
+    float choreoPositionMap(uint16_t param) {
+        param = max(0, min(MAX_STRIKER_ANGLE_DEG, param));
+        return (float) param;
     }
 
-    int choreoTimeMap(uint8_t midiVelocity) {
-        // The higher the velocity, the faster it should reach target
-        float m = log2(max(2, midiVelocity)) * 5.f;
-        int b = -100;
+    int choreoTimeMap(uint16_t param) {
+        // velocity is mapped to the time in ms.
+        return max(0, min(MAX_TRAJ_POINTS, param));
 
-        return min(MAX_TRAJ_POINTS, (int) round((MAX_TRAJ_POINTS / m)) + b);
+        // // The higher the velocity, the faster it should reach target
+        // float m = log2(max(2, midiVelocity)) * 5.f;
+        // int b = -100;
+
+        // return min(MAX_TRAJ_POINTS, (int) round((MAX_TRAJ_POINTS / m)) + b);
     }
 
-    void timeMap(uint8_t midiVelocity, int& iNumPointsForHit, int& iNumPointsForUp) {
+    void timeMap(uint16_t param, int& iNumPointsForHit, int& iNumPointsForUp) {
         iNumPointsForHit = kNumPointsForHit;
         iNumPointsForUp = kNumPointsForUp;
 
-        if (m_mode == Command::Tremolo) {
-            midiVelocity = getCorrectedVelocity(midiVelocity);
+        if (m_cmd == Command::Tremolo) {
+            param = getCorrectedParam1(param);
 
-            if (midiVelocity == 0)
+            if (param == 0)
                 return;
 
-            float m = midiVelocity * 0.08;
+            float m = param * 0.08;
             int b = 10;
             iNumPointsForHit = (int) round(kNumPointsForHit / m) + b;
             m_iTremoloStartIdx = kNumPointsForUp;
@@ -337,30 +342,30 @@ private:
         }
     }
 
-    void velocityMap(uint8_t midiVelocity, float& fInitialPosition, float& fStrikePosition, float& fBlend) {
+    void positionMap(uint16_t param, float& fInitialPosition, float& fStrikePosition, float& fBlend) {
         /*
         fInitialPosition = midiVelocity * 0.3 + 10;
         fStrikePosition = -midiVelocity * 0.5;
         fBlend = 8.f / max(16, midiVelocity);
         */
 
-        midiVelocity = getCorrectedVelocity(midiVelocity);
+        param = getCorrectedParam1(param);
 
         // Mapping from velocity to position and blend
-        fInitialPosition = midiVelocity * 0.3 + 10;
-        fStrikePosition = -midiVelocity * 0.5;
-        fBlend = 8.f / max(16, midiVelocity);
+        fInitialPosition = param * 0.3 + 10;
+        fStrikePosition = -param * 0.5;
+        fBlend = 8.f / max(16, param);
 
-        if (m_mode == Command::Tremolo) {
-            fInitialPosition = midiVelocity * 0.1 + 10;
-            fStrikePosition = -midiVelocity * 0.3;
+        if (m_cmd == Command::Tremolo) {
+            fInitialPosition = param * 0.1 + 10;
+            fStrikePosition = -param * 0.3;
         }
     }
 
-    uint8_t getCorrectedVelocity(uint8_t midiVelocity) {
+    uint8_t getCorrectedParam1(uint16_t param) {
         // Correction for strike command arriving faster than expected
         float timeCorrection = min(1.f, m_iCurrentIdx / (1.f * kTotalPoints));
-        return min(127, midiVelocity * sq(timeCorrection));
+        return min(MAX_PARAM_1, param * sq(timeCorrection));
     }
 };
 
