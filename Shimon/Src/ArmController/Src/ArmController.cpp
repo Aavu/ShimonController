@@ -168,6 +168,9 @@ Error_t ArmController::planPath(Arm::Message_t& msg) {
         std::list<Arm::Message_t> c_msg;
 
         for (auto* pArm: m_pArms) {
+            LOG_INFO("Boundaries Arm {} Left {} Right {}", pArm->getID(), pArm->getLeftBoundary(), pArm->getRightBoundary());
+        }
+        for (auto* pArm: m_pArms) {
             int id = pArm->getID();
 
             // current position is the position of the arm (maybe in the future) after it strikes the most recent message

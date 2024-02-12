@@ -43,17 +43,6 @@ public:
         int right=0;
     };
 
-    Arm(int id,
-        int iHomePosition,
-        int w, int b) : m_id(id),
-                        kHomePosition(iHomePosition),
-                        m_controller(IAIController::getInstance()),
-                        m_iW(w), m_iB(b),
-                        m_cmdManager(m_cmdCv)
-    {
-        reset();
-    }
-
     Error_t reset() {
         Error_t e;
         m_bMoving = false;
@@ -82,6 +71,17 @@ public:
                            steady_clock::now()- milliseconds(DLY)};
 //        LOG_DEBUG("Id: {} \t position: {} \t lb: {} \t rb: {}", m_id, m_iPosition, m_boundary.left, m_boundary.right);
         return kNoError;
+    }
+
+    Arm(int id,
+        int iHomePosition,
+        int w, int b) : m_id(id),
+                        kHomePosition(iHomePosition),
+                        m_controller(IAIController::getInstance()),
+                        m_iW(w), m_iB(b),
+                        m_cmdManager(m_cmdCv)
+    {
+        reset();
     }
 
     Error_t start() {
