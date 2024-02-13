@@ -19,8 +19,15 @@ void setup() {
         LOG_ERROR("Controller Init failed");
         return;
     }
-
+    // Home
+    delay(100);
+    err = pController->home();
+    if (err != 0) {
+        LOG_ERROR("Controller Homing failed");
+        return;
+    }
     LOG_LOG("Successfully Initialized! Controller Starting...");
+    delay(50);
     pController->start();
     delay(75);
     LOG_LOG("Listening for commands...");   // "in format (ascii characters) <mode><id code><midi velocity><Channel Pressure>"
@@ -60,9 +67,7 @@ Error_t parseCommand(const String& rawData, Striker::Command& cmd, uint8_t& idCo
     cmd = StrikerController::getStrikerCmd(rawData[0]);
     idCode = rawData[1];
     param1 = (uint8_t(rawData[2]) << 8) + (uint8_t) rawData[3];
-    if (rawData.length() == 7) {
-        param2 = (uint8_t(rawData[4]) << 8) + (uint8_t) rawData[5];;
-    }
+    param2 = (uint8_t(rawData[4]) << 8) + (uint8_t) rawData[5];
 
     return kNoError;
 }

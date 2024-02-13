@@ -6,7 +6,7 @@
 
 Logger* Logger::pLogger = nullptr;
 
-Logger::Logger(Logger::LogLevel logLevel): m_iLevel(logLevel) {
+Logger::Logger(Logger::LogLevel logLevel) : m_iLevel(logLevel) {
     Serial.begin(115200);
     // while (!Serial) {}
 }

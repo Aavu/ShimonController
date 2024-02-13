@@ -14,7 +14,7 @@
 #include "../logger.h"
 #include "../ErrorDef.h"
 
-#define MAX_FOLLOW_ERROR 2000
+#define MAX_FOLLOW_ERROR 4096 * 4
 #define CALLBACK_ENC_THRESHOLD 5
 #define PDO_RATE 1 // ms
 
@@ -45,7 +45,7 @@ public:
     ~Epos4() = default;
 
     // Timeout of 0 means no timeout
-    int init(int iNodeID = 1, MotorSpec spec = EC45, bool inverted = false, unsigned long timeout_ms = 0);
+    int init(int iNodeID = 1, MotorSpec spec = EC45, int encoderResolution = EC45_ENC_RES, bool inverted = false, unsigned long timeout_ms = 0);
     void reset();
 
     int configEC45();
@@ -89,7 +89,7 @@ public:
     int setFollowErrorWindow(_DWORD errWindow);
     int quickStop();
     int startHoming();
-    int SetHomePosition(int32_t iPos = 0);
+    int SetHomePosition(int32_t iPos = 0, int32_t iOffset = 0);
     int clearFault();
 
     int setCurrentControlParameters();

@@ -56,8 +56,8 @@ Error_t ArmController::init() {
         armCallback(std::forward<decltype(PH1)>(PH1), std::forward<decltype(PH2)>(PH2), std::forward<decltype(PH3)>(PH3), std::forward<decltype(PH4)>(PH4));
     });
 
-    e = m_strikerController.init(STRIKER_PORT, STRIKER_BAUDRATE);
-//    ERROR_CHECK(e, e);
+    initStrikerController(true);
+    ERROR_CHECK(e, e);
 
     m_iNoteCounter = 0;
     m_bInitialized = true;
@@ -404,4 +404,11 @@ Error_t ArmController::servosOn(bool bTurnOn) {
 Error_t ArmController::clearFault() {
     LOG_INFO("Alarm Clear...");
     return m_IAIController.clearFault();
+}
+
+Error_t ArmController::initStrikerController(bool stopRunningThread) {
+    m_strikerController.reset(stopRunningThread);
+    Error_t e = m_strikerController.init(STRIKER_PORT, STRIKER_BAUDRATE);
+    ERROR_CHECK(e, e);
+    return m_strikerController.restart();
 }

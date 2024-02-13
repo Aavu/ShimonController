@@ -80,6 +80,9 @@ void Shimon::sysMsgCallback(const char *msg) {
     } else if (strcmp(msg, "setHost") == 0 || strcmp(msg, "SetHost") == 0 || strcmp(msg, "sethost") == 0) {
         m_oscTransmitter.setHost(m_oscListener.getHost(), MASTER_PORT);
         LOG_INFO("Host and post set to {}, {}", m_oscTransmitter.getHost(), MASTER_PORT);
+    } else if (strcmp(msg, "connectOpenCR") == 0) {
+        LOG_INFO("Connecting to Open CR controller");
+        m_armController.initStrikerController(false);
     }
 }
 

@@ -198,6 +198,12 @@ public:
         }
     }
 
+    Error_t home() {
+        for (int i = 1; i < NUM_STRIKERS + 1; ++i) {
+            m_striker[i].home();
+        }
+    }
+
 private:
     Striker m_striker[NUM_STRIKERS + 1]; // 0 is dummy
     static StrikerController* pInstance;
@@ -206,7 +212,7 @@ private:
 
     HardwareTimer RPDOTimer;
 
-    StrikerController(): RPDOTimer(TIMER_CH1) {}
+    StrikerController() : RPDOTimer(TIMER_CH1) {}
 
     ~StrikerController() {
         reset();

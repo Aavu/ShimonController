@@ -4,10 +4,11 @@
 
 #include "epos4.h"
 
-int Epos4::init(int iNodeID, MotorSpec spec, bool inverted, unsigned long timeout_ms) {
+int Epos4::init(int iNodeID, MotorSpec spec, int encoderResolution, bool inverted, unsigned long timeout_ms) {
     m_uiNodeID = iNodeID;
     m_motorSpec = spec;
     m_ulTimeout_ms = timeout_ms;
+    m_iEncoderResolution = encoderResolution;
 
     if (inverted) m_iDirMultiplier = -1;
     m_currentNMTState = PreOperational;
@@ -23,12 +24,10 @@ int Epos4::init(int iNodeID, MotorSpec spec, bool inverted, unsigned long timeou
 
     switch (spec) {
     case EC45:
-        m_iEncoderResolution = EC45_ENC_RES;
         err = configEC45();
         break;
 
     case EC60:
-        m_iEncoderResolution = EC60_ENC_RES;
         err = configEC60();
         break;
     }
@@ -796,7 +795,7 @@ int Epos4::startHoming() {
     return setControlWord(0x001F);
 }
 
-int Epos4::SetHomePosition(int32_t iPos) {
+int Epos4::SetHomePosition(int32_t iPos, int32_t iOffset) {
     int n;
 
     iPos *= m_iDirMultiplier;
@@ -807,6 +806,21 @@ int Epos4::SetHomePosition(int32_t iPos) {
         return -1;
     }
     m_iEncoderPosition = iPos;
+
+    // Set homing offset
+    n = writeObj(0x30B1, 0x00, iOffset);
+    if (n != 0) {
+        LOG_ERROR("Write Obj failed. Error code: ", m_uiError);
+        return -1;
+    }
+
+    // Set Position Offset
+    n = writeObj(0x60B0, 0x00, iOffset);
+    if (n != 0) {
+        LOG_ERROR("Write Obj failed. Error code: ", m_uiError);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -896,7 +910,7 @@ int Epos4::setPositionControlParameters() {
 
 int Epos4::setPositionControlParameters_EC60() {
     int n;
-    n = writeObj(POS_CTRL_PARAM_ADDR, PC_P_GAIN, 15758200); // 11758200
+    n = writeObj(POS_CTRL_PARAM_ADDR, PC_P_GAIN, 11758200); // 11758200 // 15758200
     if (n != 0) {
         LOG_ERROR("Write Obj failed. Error code: ", m_uiError);
         return -1;
@@ -915,7 +929,7 @@ int Epos4::setPositionControlParameters_EC60() {
         return -1;
     }
 
-    n = writeObj(POS_CTRL_PARAM_ADDR, PC_D_GAIN, 522732);
+    n = writeObj(POS_CTRL_PARAM_ADDR, PC_D_GAIN, 222732);
     if (n != 0) {
         LOG_ERROR("Write Obj failed. Error code: ", m_uiError);
         return -1;

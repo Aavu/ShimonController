@@ -49,7 +49,7 @@ public:
         LOG_TRACE("Initializing Striker Controller with Host: {} \t port: {}", host, iPort);
         Error_t e = m_transmitter.init(host, iPort);
         ERROR_CHECK(e, e);
-        setMode(Mode::Strike);
+        restart();
 
         m_bInitialized = true;
         return kNoError;
@@ -71,10 +71,10 @@ public:
         if (m_pStrikerThread) if (m_pStrikerThread->joinable()) m_pStrikerThread->join();
     }
 
-    Error_t reset() {
+    Error_t reset(bool stopThread = true) {
         if (!m_bInitialized) return kNoError;
         LOG_TRACE("Resetting Strikers");
-        stop();
+        if (stopThread) { stop(); }
         m_transmitter.reset();
         m_bInitialized = false;
 

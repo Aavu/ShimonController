@@ -42,7 +42,7 @@ using namespace std::chrono;
 
 class ArmController {
 public:
-    ArmController(OscListener& oscListener, tp programStartTime = steady_clock::now());
+    explicit ArmController(OscListener& oscListener, tp programStartTime = steady_clock::now());
     ~ArmController();
     Error_t init();
 
@@ -56,6 +56,7 @@ public:
 
     Error_t clearFault();
 
+    Error_t initStrikerController(bool stopRunningThread = true);
     void setStatusCallback(std::function<void(Status_t)> callback_fn) { m_statusCallback = std::move(callback_fn); }
     void setPositionCallback(std::function<void(std::array<int, NUM_ARMS>)> callback_fn) {
         m_positionCallback = std::move(callback_fn);

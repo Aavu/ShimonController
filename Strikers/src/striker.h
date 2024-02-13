@@ -27,7 +27,7 @@ public:
     }
 
     Error_t init(int iNodeId, MotorSpec spec) {
-        int err = epos.init(iNodeId, spec, kStrikerDirection[iNodeId], 2000);
+        int err = epos.init(iNodeId, spec, kEncoderResolution[iNodeId], kStrikerDirection[iNodeId], 2000);
         if (err != 0) {
             LOG_ERROR("Epos init failed for node id: %i", iNodeId);
             return kSetValueError;
@@ -35,8 +35,8 @@ public:
 
         m_iCurrentIdx = kTotalPoints;
         m_cmd = Command::Restart;
-        Error_t e = home();
-        if (e != kNoError) return e;
+        // Error_t e = home();
+        // if (e != kNoError) return e;
 
         m_bInitialized = true;
         return kNoError;
@@ -353,7 +353,7 @@ private:
 
         // Mapping from velocity to position and blend
         fInitialPosition = param * 0.3 + 10;
-        fStrikePosition = -param * 0.5;
+        fStrikePosition = -param * 0.75;
         fBlend = 8.f / max(16, param);
 
         if (m_cmd == Command::Tremolo) {
